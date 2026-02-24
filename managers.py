@@ -203,22 +203,188 @@ class ProductsManager:
         )
         return response if isinstance(response, list) else response.get("data", [])
     
-    def get_stocks(self, warehouse_id: int) -> List[Dict]:
+    def get_all_chrt_ids(self) -> List[int]:
         """
-        Получить остатки на конкретном складе
+        Получить все chrtIds (ID размеров) товаров продавца
+        
+        Returns:
+            Список chrtIds для всех товаров
+        """
+        chrt_ids = []
+        try:
+            # Получаем карточки товаров
+            response = self.api.post(
+                "/content/v2/get/cards/list",
+                data={
+                    "settings": {
+                        "cursor": {"limit": 1000},
+                        "filter": {"withPhoto": -1}
+                    }
+                },
+                base_url=API_ENDPOINTS["content"]
+            )
+            
+            if isinstance(response, dict) and 'cards' in response:
+                cards = response['cards']
+                for card in cards:
+                    sizes = card.get('sizes', [])
+                    for size in sizes:
+                        chrt_id = size.get('chrtID')
+                        if chrt_id:
+                            chrt_ids.append(chrt_id)
+                            
+            return chrt_ids
+        except Exception as e:
+            print(f"ERROR: Ошибка получения chrtIds: {e}")
+            return []
+    
+    def get_stocks(self, warehouse_id: int, chrt_ids: List[int] = None) -> List[Dict]:
+        """
+        Получить остатки на конкретном складе продавца (FBS)
         
         Args:
-            warehouse_id: ID склада
+            warehouse_id: ID склада продавца
+            chrt_ids: Список ID размеров товаров. Если None - получает автоматически.
             
         Returns:
             Остатки товаров
         """
-        response = self.api.post(
-            f"/api/v3/stocks/{warehouse_id}",
-            data={},
-            base_url=API_ENDPOINTS["marketplace"]
-        )
-        return response if isinstance(response, list) else response.get("stocks", [])
+        try:
+            # Если chrtIds не переданы - получаем все
+            if chrt_ids is None:
+                chrt_ids = self.get_all_chrt_ids()
+            
+            if not chrt_ids:
+                print("WARNING: Нет chrtIds для запроса остатков")
+                return []
+            
+            # API принимает максимум 1000 chrtIds за раз
+            all_stocks = []
+            batch_size = 1000
+            
+            for i in range(0, len(chrt_ids), batch_size):
+                batch = chrt_ids[i:i + batch_size]
+                
+                payload = {
+                    "chrtIds": batch,
+                    "skus": []  # Deprecated
+                }
+                
+                response = self.api.post(
+                    f"/api/v3/stocks/{warehouse_id}",
+                    data=payload,
+                    base_url=API_ENDPOINTS["marketplace"]
+                )
+                
+                if isinstance(response, dict):
+                    stocks = response.get('stocks', [])
+                    all_stocks.extend(stocks)
+                elif isinstance(response, list):
+                    all_stocks.extend(response)
+            
+            return all_stocks
+            
+        except Exception as e:
+            print(f"ERROR: Ошибка получения остатков: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def get_all_fbs_stocks(self) -> Dict[int, List[Dict]]:
+        """
+        Получить остатки со всех складов продавца (FBS)
+        
+        Returns:
+            Словарь {warehouse_id: [остатки]}
+        """
+        try:
+            # Получаем список всех складов
+            warehouses = self.get_warehouses()
+            if not warehouses:
+                print("WARNING: Нет складов FBS")
+                return {}
+            
+            # Получаем все chrtIds один раз
+            chrt_ids = self.get_all_chrt_ids()
+            if not chrt_ids:
+                print("WARNING: Нет chrtIds")
+                return {}
+            
+            print(f"INFO: Получено {len(chrt_ids)} chrtIds для {len(warehouses)} складов")
+            
+            all_stocks = {}
+            for warehouse in warehouses:
+                wh_id = warehouse.get('id')
+                wh_name = warehouse.get('name', 'Unknown')
+                if wh_id:
+                    stocks = self.get_stocks(wh_id, chrt_ids)
+                    if stocks:
+                        all_stocks[wh_id] = stocks
+                        print(f"INFO: Склад {wh_name}: {len(stocks)} товаров")
+            
+            return all_stocks
+            
+        except Exception as e:
+            print(f"ERROR: Ошибка получения всех остатков FBS: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
+    
+    def get_total_stocks_by_product(self) -> Dict[int, Dict]:
+        """
+        Получить суммарные остатки FBS + FBO для каждого товара
+        
+        Returns:
+            Словарь {nmId: {'fbs': сумма, 'fbo': сумма, 'total': сумма, 'details': {...}}}
+        """
+        result = {}
+        
+        try:
+            # 1. Получаем остатки FBS со всех складов
+            fbs_stocks = self.get_all_fbs_stocks()
+            
+            for wh_id, stocks in fbs_stocks.items():
+                for stock in stocks:
+                    nm_id = stock.get('nmId')
+                    amount = stock.get('amount', 0)
+                    
+                    if nm_id not in result:
+                        result[nm_id] = {
+                            'fbs': 0,
+                            'fbo': 0,
+                            'total': 0,
+                            'details': {
+                                'name': stock.get('name', ''),
+                                'article': stock.get('article', ''),
+                                'warehouses': {}
+                            }
+                        }
+                    
+                    result[nm_id]['fbs'] += amount
+                    result[nm_id]['details']['warehouses'][wh_id] = amount
+            
+            # 2. Получаем остатки FBO
+            fbo_data = self.get_fbo_stocks()
+            fbo_regions = fbo_data.get('regions', [])
+            
+            for region in fbo_regions:
+                for office in region.get('offices', []):
+                    # FBO API возвращает агрегированные данные по офисам,
+                    # но без разбивки по товарам. Для детальной информации 
+                    # нужно использовать другие методы.
+                    pass
+            
+            # 3. Считаем total
+            for nm_id in result:
+                result[nm_id]['total'] = result[nm_id]['fbs'] + result[nm_id]['fbo']
+            
+            return result
+            
+        except Exception as e:
+            print(f"ERROR: Ошибка получения суммарных остатков: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
     
     def get_fbo_stocks(self) -> Dict:
         """
