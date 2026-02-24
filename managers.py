@@ -512,51 +512,66 @@ class ProductsManager:
     
     def get_fbo_stocks_full(self) -> List[Dict]:
         """
-        Получить полные остатки FBO через API v1 (supplier/stocks)
+        Получить полные остатки FBO через Statistics API с пагинацией.
         
-        Использует GET /api/v1/supplier/stocks из Statistics API
-        Возвращает всю информацию: warehouseName, supplierArticle, nmId, barcode, quantity и т.д.
+        Использует GET /api/v1/supplier/stocks из Statistics API.
+        Идёт пачками по полю lastChangeDate, пока API не начнёт возвращать пустой список.
         
         Returns:
             Список записей с полной информацией об остатках
         """
         try:
-            print("DEBUG: Начинаем загрузку через /api/v1/supplier/stocks")
-            
-            # Используем дату месяц назад для получения актуальных остатков
-            from datetime import datetime, timedelta
-            date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-            
-            print(f"DEBUG: Запрос с dateFrom={date_from} (последние 30 дней)")
-            
-            response = self.api.get(
-                "/api/v1/supplier/stocks",
-                params={
-                    "dateFrom": date_from,
-                    "flag": 0  # 0 = все остатки
-                },
-                base_url=API_ENDPOINTS["statistics"]
-            )
-            
-            print(f"DEBUG: Получен ответ типа: {type(response)}")
-            
-            if isinstance(response, list):
-                print(f"INFO: Получено {len(response)} записей из supplier/stocks")
-                if response:
-                    print(f"DEBUG: Первая запись: {response[0]}")
-                return response
-            elif isinstance(response, dict):
-                print(f"WARNING: API вернул dict вместо list: {response}")
-                # Пробуем извлечь данные из dict если есть ключ 'stocks'
-                if 'stocks' in response:
-                    stocks = response['stocks']
-                    print(f"INFO: Извлечено {len(stocks)} записей из 'stocks' ключа")
-                    return stocks
-                return []
-            else:
-                print(f"WARNING: Неожиданный формат ответа: {type(response)} - {response}")
-                return []
-                
+            print("DEBUG: Начинаем загрузку всех остатков FBO через /api/v1/supplier/stocks с пагинацией")
+
+            # Стартовая точка — год назад, без времени (только дата)
+            date_from = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+            all_data: List[Dict] = []
+            iteration = 0
+
+            while True:
+                iteration += 1
+                print(f"DEBUG: Итерация {iteration}, запрос с dateFrom={date_from}")
+
+                response = self.api.get(
+                    "/api/v1/supplier/stocks",
+                    params={"dateFrom": date_from},
+                    base_url=API_ENDPOINTS["statistics"],
+                )
+
+                print(f"DEBUG: Получен ответ типа: {type(response)}")
+
+                if isinstance(response, list):
+                    batch = response
+                elif isinstance(response, dict):
+                    # На всякий случай поддерживаем формат с ключом 'stocks'
+                    batch = response.get("stocks", [])
+                else:
+                    print(f"WARNING: Неожиданный формат ответа: {type(response)} - {response}")
+                    break
+
+                if not batch:
+                    print("INFO: Пустой батч, считаем что остатки полностью выгружены")
+                    break
+
+                print(f"INFO: Получено записей в батче: {len(batch)}")
+                all_data.extend(batch)
+
+                last_record = batch[-1]
+                last_change = last_record.get("lastChangeDate")
+
+                if not last_change:
+                    print("WARNING: В последней записи нет lastChangeDate, прекращаем пагинацию чтобы избежать бесконечного цикла")
+                    break
+
+                # Обновляем дату для следующего запроса (как в fetchStocksBatch в googleapi.txt)
+                date_from = last_change
+
+                # Небольшая пауза между запросами, чтобы не упереться в rate limit
+                time.sleep(1)
+
+            print(f"INFO: Всего получено {len(all_data)} записей остатков FBO")
+            return all_data
+
         except Exception as e:
             print(f"ERROR: Ошибка получения полных остатков FBO: {e}")
             import traceback
