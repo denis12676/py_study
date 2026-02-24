@@ -353,7 +353,21 @@ if page == "🏠 Главная":
                         
                 elif st.session_state.quick_action == "revenue":
                     revenue = st.session_state.agent.analytics.calculate_revenue(days=30)
-                    st.json(revenue)
+                    
+                    # Красивое отображение вместо JSON
+                    st.success(f"📊 Отчет за {revenue['period_days']} дней")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("💰 Выручка", f"{revenue['total_revenue']:,.0f} ₽")
+                    with col2:
+                        st.metric("📦 Продаж", f"{revenue['total_sales']}")
+                    with col3:
+                        st.metric("📈 Средний чек", f"{revenue['average_check']:,.0f} ₽")
+                    
+                    # Красивое отображение суммы
+                    st.markdown(f"### Итого: **{revenue['total_revenue']:,.2f} ₽**")
+                    st.markdown(f"Всего продаж: **{revenue['total_sales']}** | Средний чек: **{revenue['average_check']:,.2f} ₽**")
                     
                 elif st.session_state.quick_action == "top":
                     top = st.session_state.agent.analytics.get_top_products(days=30, limit=10)
