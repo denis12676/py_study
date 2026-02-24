@@ -274,6 +274,80 @@ class ProductsManager:
             traceback.print_exc()
             return []
     
+    def get_chrt_id_mapping(self) -> Dict[int, Dict]:
+        """
+        Получить соответствие chrtId → информация о товаре
+        
+        Returns:
+            Словарь {chrtId: {'nmId': ..., 'vendorCode': ..., 'title': ..., 'brand': ...}}
+        """
+        mapping = {}
+        try:
+            cursor = {"limit": 100}
+            total_cards = 0
+            
+            while True:
+                response = self.api.post(
+                    "/content/v2/get/cards/list",
+                    data={
+                        "settings": {
+                            "cursor": cursor,
+                            "filter": {"withPhoto": -1}
+                        }
+                    },
+                    base_url=API_ENDPOINTS["content"]
+                )
+                
+                if not isinstance(response, dict):
+                    break
+                
+                if 'error' in response and response.get('error'):
+                    break
+                
+                cards = response.get('cards', [])
+                if not cards:
+                    break
+                
+                total_cards += len(cards)
+                
+                for card in cards:
+                    nm_id = card.get('nmID')
+                    vendor_code = card.get('vendorCode', '')
+                    title = card.get('title', '')
+                    brand = card.get('brand', '')
+                    sizes = card.get('sizes', [])
+                    
+                    for size in sizes:
+                        chrt_id = size.get('chrtID')
+                        if chrt_id:
+                            mapping[chrt_id] = {
+                                'nmId': nm_id,
+                                'vendorCode': vendor_code,
+                                'title': title,
+                                'brand': brand,
+                                'techSize': size.get('techSize', ''),
+                                'wbSize': size.get('wbSize', '')
+                            }
+                
+                response_cursor = response.get('cursor', {})
+                total = response_cursor.get('total', 0)
+                
+                if len(cards) < 100 or total_cards >= total:
+                    break
+                
+                last_card = cards[-1]
+                cursor = {
+                    "limit": 100,
+                    "updatedAt": last_card.get('updatedAt'),
+                    "nmID": last_card.get('nmID')
+                }
+            
+            return mapping
+            
+        except Exception as e:
+            print(f"ERROR: Ошибка получения chrtId mapping: {e}")
+            return {}
+    
     def get_stocks(self, warehouse_id: int, chrt_ids: List[int] = None) -> List[Dict]:
         """
         Получить остатки на конкретном складе продавца (FBS)
@@ -283,12 +357,15 @@ class ProductsManager:
             chrt_ids: Список ID размеров товаров. Если None - получает автоматически.
             
         Returns:
-            Остатки товаров
+            Остатки товаров с информацией о товаре (vendorCode, nmId, название)
         """
         try:
-            # Если chrtIds не переданы - получаем все
+            # Получаем маппинг chrtId → информация о товаре
+            chrt_mapping = self.get_chrt_id_mapping()
+            
+            # Если chrtIds не переданы - получаем все из маппинга
             if chrt_ids is None:
-                chrt_ids = self.get_all_chrt_ids()
+                chrt_ids = list(chrt_mapping.keys())
             
             if not chrt_ids:
                 print("WARNING: Нет chrtIds для запроса остатков")
@@ -314,6 +391,17 @@ class ProductsManager:
                 
                 if isinstance(response, dict):
                     stocks = response.get('stocks', [])
+                    # Добавляем информацию о товаре к каждому остатку
+                    for stock in stocks:
+                        chrt_id = stock.get('chrtId')
+                        if chrt_id and chrt_id in chrt_mapping:
+                            stock.update(chrt_mapping[chrt_id])
+                        else:
+                            # Если нет в маппинге, добавляем минимальную информацию
+                            stock['nmId'] = None
+                            stock['vendorCode'] = ''
+                            stock['title'] = ''
+                            stock['brand'] = ''
                     all_stocks.extend(stocks)
                 elif isinstance(response, list):
                     all_stocks.extend(response)
