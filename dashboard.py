@@ -779,7 +779,7 @@ if page == "🏠 Главная":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, width='stretch')
+                            st.dataframe(df)
                         else:
                             st.info("Нет данных о товарах")
                             
@@ -813,7 +813,7 @@ if page == "🏠 Главная":
                         if campaigns:
                             st.success(f"Найдено {len(campaigns)} кампаний")
                             df = pd.DataFrame(campaigns)
-                            st.dataframe(df, width='stretch')
+                            st.dataframe(df)
                         else:
                             st.info("Нет рекламных кампаний")
                     
@@ -831,12 +831,12 @@ if page == "🏠 Главная":
                             if report.get('daily_breakdown'):
                                 st.markdown("### 📈 По дням")
                                 df_daily = pd.DataFrame(report['daily_breakdown'])
-                                st.dataframe(df_daily, width='stretch')
+                                st.dataframe(df_daily)
                             
                             if report.get('top_products'):
                                 st.markdown("### 🏆 Топ товары")
                                 df_products = pd.DataFrame(report['top_products'][:10])
-                                st.dataframe(df_products, width='stretch')
+                                st.dataframe(df_products)
                             
                             csv_filename = st.session_state.agent.analytics.export_weekly_report_csv()
                             if csv_filename:
@@ -975,7 +975,7 @@ elif page == "📦 Товары":
                         })
                     
                     df = pd.DataFrame(df_data)
-                    st.dataframe(df, width='stretch')
+                    st.dataframe(df)
                     
                     # Export
                     csv = df.to_csv(index=False).encode('utf-8')
@@ -1068,7 +1068,7 @@ elif page == "📋 Остатки":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, width='stretch')
+                            st.dataframe(df)
                             
                             csv = df.to_csv(index=False).encode('utf-8')
                             st.download_button(
@@ -1139,7 +1139,7 @@ elif page == "📋 Остатки":
                             
                             st.markdown("#### 📊 По регионам")
                             df = pd.DataFrame(df_regions)
-                            st.dataframe(df, width='stretch')
+                            st.dataframe(df)
                             
                             # Детализация по складам
                             st.markdown("#### 📋 Детализация по складам")
@@ -1157,7 +1157,7 @@ elif page == "📋 Остатки":
                             
                             if all_offices:
                                 df_offices = pd.DataFrame(all_offices)
-                                st.dataframe(df_offices, width='stretch')
+                                st.dataframe(df_offices)
                         else:
                             st.info("Нет данных о остатках FBO.")
                             
@@ -1181,7 +1181,7 @@ elif page == "📋 Остатки":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, width='stretch')
+                            st.dataframe(df)
                             
                             # Скачать CSV
                             csv = df.to_csv(index=False).encode('utf-8')
@@ -1298,7 +1298,7 @@ elif page == "📊 Аналитика":
                     ]
                 }
                 df_details = pd.DataFrame(details_data)
-                st.dataframe(df_details, width='stretch', hide_index=True)
+                st.dataframe(df_details, hide_index=True)
         else:
             # Простой формат
             col1, col2, col3 = st.columns(3)
@@ -1348,7 +1348,7 @@ elif page == "📢 Реклама":
                     })
                 
                 df = pd.DataFrame(df_data)
-                st.dataframe(df, width='stretch')
+                st.dataframe(df)
             else:
                 st.info("Нет рекламных кампаний")
     
