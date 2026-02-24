@@ -548,6 +548,128 @@ class ProductsManager:
         except Exception as e:
             print(f"ERROR: Ошибка получения остатков FBO: {e}")
             return {"regions": []}
+    
+    def get_fbo_stocks_detailed(self) -> List[Dict]:
+        """
+        Получить детальные остатки FBO с информацией по товарам (включая vendorCode)
+        
+        Использует метод POST /api/v2/stocks-report/products/groups из Analytics API
+        с stockType="wb" для получения остатков по каждому товару
+        
+        Returns:
+            Список товаров с остатками на FBO складах
+        """
+        try:
+            # Сначала получаем маппинг nmId -> vendorCode, title, brand
+            product_mapping = {}
+            cursor = {"limit": 100}
+            
+            while True:
+                response = self.api.post(
+                    "/content/v2/get/cards/list",
+                    data={
+                        "settings": {
+                            "cursor": cursor,
+                            "filter": {"withPhoto": -1}
+                        }
+                    },
+                    base_url=API_ENDPOINTS["content"]
+                )
+                
+                if not isinstance(response, dict):
+                    break
+                
+                cards = response.get('cards', [])
+                if not cards:
+                    break
+                
+                for card in cards:
+                    nm_id = card.get('nmID')
+                    if nm_id:
+                        product_mapping[nm_id] = {
+                            'vendorCode': card.get('vendorCode', ''),
+                            'title': card.get('title', ''),
+                            'brand': card.get('brand', ''),
+                            'subjectName': card.get('subjectName', ''),
+                            'nmId': nm_id
+                        }
+                
+                # Проверяем есть ли еще товары
+                response_cursor = response.get('cursor', {})
+                total = response_cursor.get('total', 0)
+                
+                if len(cards) < 100 or len(product_mapping) >= total:
+                    break
+                
+                # Обновляем cursor для следующей страницы
+                last_card = cards[-1]
+                cursor = {
+                    "limit": 100,
+                    "updatedAt": last_card.get('updatedAt'),
+                    "nmID": last_card.get('nmID')
+                }
+            
+            print(f"INFO: Получено {len(product_mapping)} товаров для FBO")
+            
+            # Теперь получаем остатки FBO с детализацией
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Запрашиваем остатки без фильтрации по nmIds (получаем все)
+            response = self.api.post(
+                "/api/v2/stocks-report/products/groups",
+                data={
+                    "nmIDs": [],
+                    "subjectIDs": [],
+                    "brandNames": [],
+                    "tagIDs": [],
+                    "currentPeriod": {
+                        "start": today,
+                        "end": today
+                    },
+                    "stockType": "wb",
+                    "skipDeletedNm": True,
+                    "orderBy": {
+                        "field": "nmID",
+                        "mode": "asc"
+                    },
+                    "limit": 1000,
+                    "offset": 0
+                },
+                base_url=API_ENDPOINTS["analytics"]
+            )
+            
+            result = []
+            if isinstance(response, dict) and 'data' in response:
+                data = response['data']
+                groups = data.get('groups', [])
+                
+                for group in groups:
+                    nm_id = group.get('nmID')
+                    if nm_id and nm_id in product_mapping:
+                        # Добавляем информацию о товаре
+                        product_info = product_mapping[nm_id]
+                        
+                        # Получаем метрики остатков
+                        stocks = group.get('stocks', [])
+                        total_stock = sum(s.get('stock', 0) for s in stocks)
+                        
+                        result.append({
+                            'nmId': nm_id,
+                            'vendorCode': product_info['vendorCode'],
+                            'title': product_info['title'],
+                            'brand': product_info['brand'],
+                            'subject': product_info['subjectName'],
+                            'stockCount': total_stock,
+                            'stocks': stocks
+                        })
+            
+            return result
+            
+        except Exception as e:
+            print(f"ERROR: Ошибка получения детальных остатков FBO: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
 
 class AnalyticsManager:
