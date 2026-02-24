@@ -238,7 +238,7 @@ else:
 # Main navigation
 page = st.sidebar.radio(
     "📍 Навигация",
-    ["🏠 Главная", "💬 AI Чат", "📦 Товары", "📊 Аналитика", "📢 Реклама"]
+    ["🏠 Главная", "💬 AI Чат", "📦 Товары", "📋 Остатки", "📊 Аналитика", "📢 Реклама"]
 )
 
 # Main content
@@ -583,6 +583,170 @@ elif page == "📦 Товары":
                 result = st.session_state.agent.products.update_price(nm_id, new_price, discount)
                 st.success("Цена обновлена!")
                 st.json(result)
+
+elif page == "📋 Остатки":
+    st.markdown("<div class='main-header'>📋 Остатки товаров</div>", unsafe_allow_html=True)
+    
+    tab_fbs, tab_fbo = st.tabs(["📦 FBS (склад продавца)", "🏭 FBO (склад WB)"])
+    
+    with tab_fbs:
+        st.markdown("### 📦 Остатки на складе продавца (FBS)")
+        
+        if st.button("🔄 Загрузить склады", type="primary", key="fbs_load_warehouses"):
+            with st.spinner("Загрузка складов..."):
+                try:
+                    warehouses = st.session_state.agent.products.get_warehouses()
+                    st.session_state.fbs_warehouses = warehouses
+                    if warehouses:
+                        st.success(f"Найдено {len(warehouses)} складов")
+                    else:
+                        st.info("Нет складов")
+                except Exception as e:
+                    st.error(f"Ошибка: {e}")
+        
+        if 'fbs_warehouses' in st.session_state and st.session_state.fbs_warehouses:
+            warehouse_options = {w.get('name', f"Склад {w.get('id')}"): w.get('id') 
+                               for w in st.session_state.fbs_warehouses}
+            
+            selected_warehouse = st.selectbox(
+                "Выберите склад:",
+                options=list(warehouse_options.keys()),
+                key="fbs_warehouse_select"
+            )
+            
+            warehouse_id = warehouse_options[selected_warehouse]
+            
+            if st.button("📥 Загрузить остатки", type="primary", key="fbs_load_stocks"):
+                with st.spinner("Загрузка остатков..."):
+                    try:
+                        stocks = st.session_state.agent.products.get_stocks(warehouse_id)
+                        st.session_state.fbs_stocks = stocks
+                        
+                        if stocks:
+                            st.success(f"Загружено {len(stocks)} позиций")
+                            
+                            df_data = []
+                            for s in stocks:
+                                df_data.append({
+                                    'Баркод': s.get('sku', ''),
+                                    'Артикул': s.get('nmId', ''),
+                                    'Остаток': s.get('amount', 0),
+                                    'В пути': s.get('inTransit', 0)
+                                })
+                            
+                            df = pd.DataFrame(df_data)
+                            st.dataframe(df, use_container_width=True)
+                            
+                            csv = df.to_csv(index=False).encode('utf-8')
+                            st.download_button(
+                                "📥 Скачать CSV",
+                                csv,
+                                "fbs_stocks.csv",
+                                "text/csv",
+                                key="fbs_download"
+                            )
+                        else:
+                            st.info("Нет данных об остатках")
+                    except Exception as e:
+                        st.error(f"Ошибка: {e}")
+    
+    with tab_fbo:
+        st.markdown("### 🏭 Остатки на складах WB (FBO)")
+        st.markdown("*Данные по остаткам на всех складах Wildberries*")
+        
+        if st.button("🔄 Загрузить остатки FBO", type="primary", key="fbo_load"):
+            with st.spinner("Загрузка остатков FBO..."):
+                try:
+                    result = st.session_state.agent.products.get_fbo_stocks()
+                    st.session_state.fbo_stocks = result
+                    
+                    regions = result.get('regions', [])
+                    
+                    if regions:
+                        st.success(f"Загружено {len(regions)} регионов со складами")
+                        
+                        # Подсчет общих метрик
+                        total_stock_count = 0
+                        total_stock_sum = 0
+                        total_offices = 0
+                        
+                        for region in regions:
+                            metrics = region.get('metrics', {})
+                            total_stock_count += metrics.get('stockCount', 0)
+                            total_stock_sum += metrics.get('stockSum', 0)
+                            total_offices += len(region.get('offices', []))
+                        
+                        # Метрики
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Всего товаров", f"{total_stock_count:,}")
+                        with col2:
+                            st.metric("Сумма остатков", f"{total_stock_sum:,} ₽")
+                        with col3:
+                            st.metric("Количество складов", total_offices)
+                        
+                        # Таблица по регионам
+                        df_regions = []
+                        for region in regions:
+                            metrics = region.get('metrics', {})
+                            df_regions.append({
+                                'Регион': region.get('regionName', ''),
+                                'Товаров': metrics.get('stockCount', 0),
+                                'Сумма': f"{metrics.get('stockSum', 0):,} ₽",
+                                'Складов': len(region.get('offices', []))
+                            })
+                        
+                        st.markdown("#### 📊 По регионам")
+                        df = pd.DataFrame(df_regions)
+                        st.dataframe(df, use_container_width=True)
+                        
+                        # Детализация по складам
+                        st.markdown("#### 📋 Детализация по складам")
+                        all_offices = []
+                        for region in regions:
+                            for office in region.get('offices', []):
+                                metrics = office.get('metrics', {})
+                                all_offices.append({
+                                    'Регион': region.get('regionName', ''),
+                                    'Склад': office.get('officeName', ''),
+                                    'ID склада': office.get('officeID', ''),
+                                    'Товаров': metrics.get('stockCount', 0),
+                                    'Сумма': f"{metrics.get('stockSum', 0):,} ₽"
+                                })
+                        
+                        if all_offices:
+                            df_offices = pd.DataFrame(all_offices)
+                            st.dataframe(df_offices, use_container_width=True)
+                        
+                        # Скачать CSV
+                        csv_data = []
+                        for region in regions:
+                            for office in region.get('offices', []):
+                                metrics = office.get('metrics', {})
+                                csv_data.append({
+                                    'region': region.get('regionName', ''),
+                                    'office_id': office.get('officeID', ''),
+                                    'office_name': office.get('officeName', ''),
+                                    'stock_count': metrics.get('stockCount', 0),
+                                    'stock_sum': metrics.get('stockSum', 0)
+                                })
+                        
+                        if csv_data:
+                            df_csv = pd.DataFrame(csv_data)
+                            csv = df_csv.to_csv(index=False).encode('utf-8')
+                            st.download_button(
+                                "📥 Скачать CSV",
+                                csv,
+                                "fbo_stocks_by_warehouse.csv",
+                                "text/csv",
+                                key="fbo_download"
+                            )
+                    else:
+                        st.info("Нет данных о остатках FBO. Возможно, у вас нет товаров на складах WB.")
+                except Exception as e:
+                    st.error(f"Ошибка загрузки: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
 elif page == "📊 Аналитика":
     st.markdown("<div class='main-header'>📊 Аналитика продаж</div>", unsafe_allow_html=True)

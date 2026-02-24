@@ -199,9 +199,9 @@ class ProductsManager:
         """
         response = self.api.get(
             "/api/v3/warehouses",
-            base_url=self.api.config.content_url
+            base_url=API_ENDPOINTS["marketplace"]
         )
-        return response.get("data", [])
+        return response if isinstance(response, list) else response.get("data", [])
     
     def get_stocks(self, warehouse_id: int) -> List[Dict]:
         """
@@ -215,9 +215,49 @@ class ProductsManager:
         """
         response = self.api.post(
             f"/api/v3/stocks/{warehouse_id}",
-            base_url=self.api.config.content_url
+            data={},
+            base_url=API_ENDPOINTS["marketplace"]
         )
-        return response.get("stocks", [])
+        return response if isinstance(response, list) else response.get("stocks", [])
+    
+    def get_fbo_stocks(self) -> Dict:
+        """
+        Получить остатки на складах WB (FBO)
+        
+        Использует метод POST /api/v2/stocks-report/offices из Analytics API
+        с stockType="wb" для получения остатков на складах Wildberries
+        
+        Returns:
+            Словарь с данными по регионам и офисам (складам)
+        """
+        try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            response = self.api.post(
+                "/api/v2/stocks-report/offices",
+                data={
+                    "nmIDs": [],
+                    "subjectIDs": [],
+                    "brandNames": [],
+                    "tagIDs": [],
+                    "currentPeriod": {
+                        "start": today,
+                        "end": today
+                    },
+                    "stockType": "wb",  # склады WB (FBO)
+                    "skipDeletedNm": True
+                },
+                base_url=API_ENDPOINTS["analytics"]
+            )
+            
+            if isinstance(response, dict) and 'data' in response:
+                return response['data']
+            else:
+                return {"regions": []}
+                
+        except Exception as e:
+            print(f"ERROR: Ошибка получения остатков FBO: {e}")
+            return {"regions": []}
 
 
 class AnalyticsManager:
