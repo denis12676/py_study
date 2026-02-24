@@ -523,11 +523,11 @@ class ProductsManager:
         try:
             print("DEBUG: Начинаем загрузку через /api/v1/supplier/stocks")
             
-            # Используем максимально раннюю дату для получения ВСЕХ остатков
-            # Согласно документации: "Для получения полного остатка следует указывать максимально раннее значение. Например, 2019-06-20"
-            date_from = "2019-06-20"
+            # Используем дату неделю назад для получения актуальных остатков
+            from datetime import datetime, timedelta
+            date_from = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
             
-            print(f"DEBUG: Запрос с dateFrom={date_from} (максимально ранняя дата)")
+            print(f"DEBUG: Запрос с dateFrom={date_from} (последние 7 дней)")
             
             response = self.api.get(
                 "/api/v1/supplier/stocks",
