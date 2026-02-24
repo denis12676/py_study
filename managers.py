@@ -629,6 +629,10 @@ class ProductsManager:
                     "stockType": "wb",
                     "skipDeletedNm": True,
                     "availabilityFilters": [],  # Обязательный параметр
+                    "orderBy": {
+                        "field": "avgOrders",  # Пробуем поле из примера документации
+                        "mode": "asc"
+                    },
                     "limit": 1000,
                     "offset": 0
                 },
