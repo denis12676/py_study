@@ -212,30 +212,66 @@ class ProductsManager:
         """
         chrt_ids = []
         try:
-            # Получаем карточки товаров
-            response = self.api.post(
-                "/content/v2/get/cards/list",
-                data={
-                    "settings": {
-                        "cursor": {"limit": 1000},
-                        "filter": {"withPhoto": -1}
-                    }
-                },
-                base_url=API_ENDPOINTS["content"]
-            )
+            # Content API имеет лимит 100 товаров за запрос, используем пагинацию
+            cursor = {"limit": 100}
+            total_cards = 0
             
-            if isinstance(response, dict) and 'cards' in response:
-                cards = response['cards']
+            while True:
+                response = self.api.post(
+                    "/content/v2/get/cards/list",
+                    data={
+                        "settings": {
+                            "cursor": cursor,
+                            "filter": {"withPhoto": -1}
+                        }
+                    },
+                    base_url=API_ENDPOINTS["content"]
+                )
+                
+                if not isinstance(response, dict):
+                    print(f"WARNING: Неожиданный ответ от Content API: {type(response)}")
+                    break
+                
+                if 'error' in response and response.get('error'):
+                    error_text = response.get('errorText', 'Unknown error')
+                    print(f"ERROR: Content API error: {error_text}")
+                    break
+                
+                cards = response.get('cards', [])
+                if not cards:
+                    break
+                
+                total_cards += len(cards)
+                
                 for card in cards:
                     sizes = card.get('sizes', [])
                     for size in sizes:
                         chrt_id = size.get('chrtID')
                         if chrt_id:
                             chrt_ids.append(chrt_id)
-                            
+                
+                # Проверяем есть ли еще товары
+                response_cursor = response.get('cursor', {})
+                total = response_cursor.get('total', 0)
+                
+                if len(cards) < 100 or total_cards >= total:
+                    break
+                
+                # Обновляем cursor для следующей страницы
+                last_card = cards[-1]
+                cursor = {
+                    "limit": 100,
+                    "updatedAt": last_card.get('updatedAt'),
+                    "nmID": last_card.get('nmID')
+                }
+            
+            print(f"INFO: Получено {total_cards} карточек, {len(chrt_ids)} chrtIds")
             return chrt_ids
+            
         except Exception as e:
             print(f"ERROR: Ошибка получения chrtIds: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def get_stocks(self, warehouse_id: int, chrt_ids: List[int] = None) -> List[Dict]:
