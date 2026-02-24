@@ -521,8 +521,12 @@ class ProductsManager:
             Список записей с полной информацией об остатках
         """
         try:
+            print("DEBUG: Начинаем загрузку через /api/v1/supplier/stocks")
+            
             # Используем текущую дату
             today = datetime.now().strftime("%Y-%m-%d")
+            
+            print(f"DEBUG: Запрос с dateFrom={today}, flag=0")
             
             response = self.api.get(
                 "/api/v1/supplier/stocks",
@@ -533,11 +537,23 @@ class ProductsManager:
                 base_url=API_ENDPOINTS["statistics"]
             )
             
+            print(f"DEBUG: Получен ответ типа: {type(response)}")
+            
             if isinstance(response, list):
                 print(f"INFO: Получено {len(response)} записей из supplier/stocks")
+                if response:
+                    print(f"DEBUG: Первая запись: {response[0]}")
                 return response
+            elif isinstance(response, dict):
+                print(f"WARNING: API вернул dict вместо list: {response}")
+                # Пробуем извлечь данные из dict если есть ключ 'stocks'
+                if 'stocks' in response:
+                    stocks = response['stocks']
+                    print(f"INFO: Извлечено {len(stocks)} записей из 'stocks' ключа")
+                    return stocks
+                return []
             else:
-                print(f"WARNING: Неожиданный формат ответа: {type(response)}")
+                print(f"WARNING: Неожиданный формат ответа: {type(response)} - {response}")
                 return []
                 
         except Exception as e:

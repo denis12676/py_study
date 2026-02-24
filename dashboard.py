@@ -1110,10 +1110,6 @@ elif page == "📋 Остатки":
         if st.button("🔄 Загрузить остатки FBO", type="primary", key="fbo_load"):
             with st.spinner("Загрузка остатков FBO..."):
                 try:
-                    # Загружаем сводку по складам
-                    result_summary = st.session_state.agent.products.get_fbo_stocks()
-                    st.session_state.fbo_stocks = result_summary
-                    
                     # Загружаем полные остатки FBO
                     stocks = st.session_state.agent.products.get_fbo_stocks_full()
                     st.session_state.fbo_stocks_full = stocks
