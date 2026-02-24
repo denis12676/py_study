@@ -730,19 +730,19 @@ if page == "🏠 Главная":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📦 Показать товары", width='stretch'):
+            if st.button("📦 Показать товары", use_container_width=True):
                 st.session_state.quick_action = "products"
         
         with col2:
-            if st.button("💰 Выручка", width='stretch'):
+            if st.button("💰 Выручка", use_container_width=True):
                 st.session_state.quick_action = "revenue"
         
         with col3:
-            if st.button("🔥 Топ товаров", width='stretch'):
+            if st.button("🔥 Топ товаров", use_container_width=True):
                 st.session_state.quick_action = "top"
         
         with col4:
-            if st.button("📢 Реклама", width='stretch'):
+            if st.button("📢 Реклама", use_container_width=True):
                 st.session_state.quick_action = "campaigns"
         
         # Second row
@@ -750,7 +750,7 @@ if page == "🏠 Главная":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📊 Отчет за неделю", width='stretch'):
+            if st.button("📊 Отчет за неделю", use_container_width=True):
                 st.session_state.quick_action = "weekly"
         
         # Execute quick action
