@@ -523,15 +523,16 @@ class ProductsManager:
         try:
             print("DEBUG: Начинаем загрузку через /api/v1/supplier/stocks")
             
-            # Используем текущую дату
-            today = datetime.now().strftime("%Y-%m-%d")
+            # Используем максимально раннюю дату для получения ВСЕХ остатков
+            # Согласно документации: "Для получения полного остатка следует указывать максимально раннее значение. Например, 2019-06-20"
+            date_from = "2019-06-20"
             
-            print(f"DEBUG: Запрос с dateFrom={today}, flag=0")
+            print(f"DEBUG: Запрос с dateFrom={date_from} (максимально ранняя дата)")
             
             response = self.api.get(
                 "/api/v1/supplier/stocks",
                 params={
-                    "dateFrom": today,
+                    "dateFrom": date_from,
                     "flag": 0  # 0 = все остатки
                 },
                 base_url=API_ENDPOINTS["statistics"]
