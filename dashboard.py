@@ -304,7 +304,24 @@ if page == "🏠 Главная":
                     products = st.session_state.agent.products.get_all_products(limit=100)
                     if products:
                         st.success(f"Загружено {len(products)} товаров")
-                        df = pd.DataFrame(products)
+                        # Convert to DataFrame with safe data extraction
+                        df_data = []
+                        for p in products:
+                            sizes = p.get('sizes', [])
+                            price = 0
+                            if sizes and len(sizes) > 0:
+                                price = sizes[0].get('price', 0)
+                            
+                            df_data.append({
+                                'Артикул': p.get('nmID'),
+                                'Название': p.get('title', '')[:50],
+                                'Артикул продавца': p.get('vendorCode', ''),
+                                'Бренд': p.get('brand', ''),
+                                'Цена': price,
+                                'Предмет': p.get('subjectName', '')
+                            })
+                        
+                        df = pd.DataFrame(df_data)
                         st.dataframe(df, use_container_width=True)
                     else:
                         st.info("Нет данных о товарах")
