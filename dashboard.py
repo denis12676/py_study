@@ -14,81 +14,309 @@ from ai_agent import WildberriesAIAgent
 from wb_client import WBConfig
 from managers import ProductsManager, AnalyticsManager, AdvertisingManager
 
-# Page configuration
+# Page configuration with dark theme
 st.set_page_config(
     page_title="Wildberries AI Dashboard",
     page_icon="🛍️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
-# Custom CSS
+# Custom CSS - Dark Theme (Modern Dashboard Style)
 st.markdown("""
 <style>
+    /* Dark Theme Colors */
+    :root {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-card: #1e293b;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --accent-purple: #8b5cf6;
+        --accent-blue: #3b82f6;
+        --border-color: #334155;
+    }
+    
+    /* Global Dark Theme */
+    .stApp {
+        background-color: var(--bg-primary);
+    }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: var(--bg-secondary);
+        border-right: 1px solid var(--border-color);
+    }
+    
+    [data-testid="stSidebar"] .stRadio > label {
+        color: var(--text-primary) !important;
+    }
+    
+    [data-testid="stSidebar"] .stRadio > div {
+        color: var(--text-secondary);
+    }
+    
+    /* Main Header */
     .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #7B68EE;
-        margin-bottom: 1rem;
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 10px;
-        color: white;
-        margin: 0.5rem 0;
-    }
-    .metric-value {
         font-size: 2rem;
-        font-weight: bold;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 1.5rem;
+        letter-spacing: -0.5px;
     }
+    
+    /* Modern Cards */
+    .stMetric {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.25rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    
+    .stMetric > div {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .stMetric > div[data-testid="stMetricValue"] {
+        color: var(--text-primary);
+        font-size: 1.75rem;
+        font-weight: 700;
+    }
+    
+    /* Metric Cards */
+    .metric-card {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+        color: var(--text-primary);
+        margin: 0.75rem 0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+    }
+    
+    .metric-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    
     .metric-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        font-weight: 500;
     }
-    .status-online {
-        color: #00C851;
-        font-weight: bold;
-    }
-    .status-offline {
-        color: #ff4444;
-        font-weight: bold;
-    }
+    
+    /* Buttons */
     .stButton>button {
         width: 100%;
-        border-radius: 5px;
-        height: 3rem;
-        font-weight: bold;
+        border-radius: 8px;
+        height: 2.75rem;
+        font-weight: 600;
+        background-color: var(--accent-purple);
+        color: white;
+        border: none;
+        transition: all 0.2s;
     }
+    
+    .stButton>button:hover {
+        background-color: #7c3aed;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+    }
+    
+    .stButton>button:active {
+        transform: translateY(0);
+    }
+    
+    /* Secondary Button */
+    .secondary-button > button {
+        background-color: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+    }
+    
+    .secondary-button > button:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+    
+    /* Tables */
+    .stDataFrame {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    .stDataFrame thead th {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        font-weight: 600;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .stDataFrame tbody td {
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: var(--bg-secondary);
+        border-radius: 8px;
+        padding: 0.25rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        color: var(--text-secondary);
+        border-radius: 6px;
+    }
+    
+    .stTabs [data-baseweb="tab-highlight"] {
+        background-color: var(--accent-purple);
+        border-radius: 6px;
+    }
+    
+    /* Select Box */
+    .stSelectbox > div > div {
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: 8px;
+    }
+    
+    /* Text Input */
+    .stTextInput > div > div > input {
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: 8px;
+    }
+    
+    /* Download Button */
+    .stDownloadButton > button {
+        background-color: transparent;
+        border: 1px solid var(--accent-purple);
+        color: var(--accent-purple);
+    }
+    
+    .stDownloadButton > button:hover {
+        background-color: rgba(139, 92, 246, 0.1);
+    }
+    
+    /* Status Indicators */
+    .status-online {
+        color: #10b981;
+        font-weight: 600;
+    }
+    
+    .status-offline {
+        color: #ef4444;
+        font-weight: 600;
+    }
+    
+    /* Chat Messages */
     .chat-message {
         padding: 1rem;
-        border-radius: 10px;
-        margin: 0.5rem 0;
+        border-radius: 12px;
+        margin: 0.75rem 0;
         font-size: 14px;
         line-height: 1.5;
     }
+    
     .chat-user {
-        background-color: #E3F2FD;
-        margin-left: 20%;
-        color: #333;
+        background-color: rgba(59, 130, 246, 0.15);
+        margin-left: 15%;
+        color: var(--text-primary);
+        border: 1px solid rgba(59, 130, 246, 0.3);
     }
+    
     .chat-bot {
-        background-color: #F3E5F5;
-        margin-right: 20%;
-        color: #333;
+        background-color: rgba(139, 92, 246, 0.15);
+        margin-right: 15%;
+        color: var(--text-primary);
+        border: 1px solid rgba(139, 92, 246, 0.3);
     }
+    
     .chat-bot pre {
-        background-color: #f5f5f5;
-        padding: 0.5rem;
-        border-radius: 5px;
+        background-color: var(--bg-secondary);
+        padding: 0.75rem;
+        border-radius: 6px;
         overflow-x: auto;
         font-size: 12px;
+        border: 1px solid var(--border-color);
     }
-    .chat-bot code {
-        background-color: #f5f5f5;
-        padding: 0.2rem 0.4rem;
-        border-radius: 3px;
-        font-size: 12px;
+    
+    /* Info Cards */
+    .info-card {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin: 0.75rem 0;
+    }
+    
+    .info-card h4 {
+        color: var(--text-primary);
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+    }
+    
+    .info-card p {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+    
+    /* Section Headers */
+    h3 {
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 1.25rem;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    /* Expander */
+    .stExpander {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    /* Success/Error Messages */
+    .stSuccess {
+        background-color: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #34d399;
+        border-radius: 8px;
+    }
+    
+    .stError {
+        background-color: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+        border-radius: 8px;
+    }
+    
+    .stInfo {
+        background-color: rgba(59, 130, 246, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #60a5fa;
+        border-radius: 8px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -104,8 +332,21 @@ if 'sales_data' not in st.session_state:
     st.session_state.sales_data = None
 
 # Sidebar
-st.sidebar.markdown("## 🛍️ WB AI Agent")
-st.sidebar.markdown("---")
+st.sidebar.markdown("""
+<style>
+    .sidebar-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        margin-bottom: 1rem;
+    }
+    .sidebar-divider {
+        border-top: 1px solid #334155;
+        margin: 1rem 0;
+    }
+</style>
+<div class='sidebar-title'>🛍️ WB AI Dashboard</div>
+""", unsafe_allow_html=True)
 
 # API Token input
 if not st.session_state.agent:
@@ -143,7 +384,7 @@ if not st.session_state.agent:
         
         if use_saved:
             api_token = saved_token  # Use token but don't show it
-            st.sidebar.markdown("<div style='color: green;'>✓ Токен будет использован автоматически</div>", unsafe_allow_html=True)
+            st.sidebar.markdown("<div style='color: #34d399;'>✓ Токен будет использован автоматически</div>", unsafe_allow_html=True)
         else:
             # User wants to enter new token
             api_token = st.sidebar.text_input(
@@ -162,7 +403,7 @@ if not st.session_state.agent:
         )
         st.sidebar.info("💡 Токен можно получить в личном кабинете WB: Профиль → API Интеграции")
     
-    if st.sidebar.button("🚀 Подключиться", type="primary"):
+    if st.sidebar.button("🚀 Подключиться", type="primary", use_container_width=True):
         if api_token:
             try:
                 with st.spinner("Подключение к WB API..."):
@@ -181,7 +422,7 @@ if not st.session_state.agent:
         else:
             st.sidebar.warning("⚠️ Введите токен")
     
-    st.sidebar.markdown("---")
+    st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
     st.sidebar.info("""
     **Как получить токен:**
     1. Личный кабинет WB
@@ -243,196 +484,239 @@ page = st.sidebar.radio(
 
 # Main content
 if page == "🏠 Главная":
-    st.markdown("<div class='main-header'>📊 Дашборд Wildberries</div>", unsafe_allow_html=True)
+    # Modern header with top bar
+    col_title, col_period = st.columns([3, 1])
+    with col_title:
+        st.markdown("<div class='main-header'>📊 Сводка по финансам</div>", unsafe_allow_html=True)
+    with col_period:
+        period = st.selectbox("Период:", ["7 дней", "30 дней", "90 дней"], index=1)
     
-    # Quick stats
-    col1, col2, col3, col4 = st.columns(4)
+    # Top navigation tabs
+    tab_ozon, tab_wb = st.tabs(["Ozon", "Wildberries"])
     
-    try:
-        # Get revenue data
-        revenue = st.session_state.agent.analytics.calculate_revenue(days=30)
+    with tab_wb:
+        # Quick stats in modern card layout
+        col1, col2, col3, col4 = st.columns(4)
+        
+        try:
+            days = {"7 дней": 7, "30 дней": 30, "90 дней": 90}[period]
+            revenue = st.session_state.agent.analytics.calculate_revenue(days=days)
+            
+            with col1:
+                st.markdown(f"""
+                <div class='metric-card'>
+                    <div class='metric-label'>Выручка</div>
+                    <div class='metric-value'>{revenue['total_revenue']:,.0f} ₽</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div class='metric-card'>
+                    <div class='metric-label'>Продаж</div>
+                    <div class='metric-value'>{revenue['total_sales']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown(f"""
+                <div class='metric-card'>
+                    <div class='metric-label'>Средний чек</div>
+                    <div class='metric-value'>{revenue['average_check']:,.0f} ₽</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col4:
+                # Get products count
+                products = st.session_state.agent.products.get_all_products(limit=1)
+                st.markdown(f"""
+                <div class='metric-card'>
+                    <div class='metric-label'>Товаров</div>
+                    <div class='metric-value'>{len(products) if products else '...'}+</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+        except Exception as e:
+            st.error(f"Ошибка загрузки данных: {str(e)}")
+            st.info("💡 Попробуйте обновить страницу или проверить API токен.")
+        
+        # Section with charts
+        st.markdown("---")
+        st.markdown("### 📈 Аналитика продаж")
+        
+        col_chart, col_info = st.columns([2, 1])
+        
+        with col_chart:
+            try:
+                # Get top products for chart
+                top = st.session_state.agent.analytics.get_top_products(days=30, limit=10)
+                if top:
+                    df = pd.DataFrame(top)
+                    fig = px.bar(
+                        df, 
+                        x='name', 
+                        y='revenue', 
+                        title='Топ товаров по выручке',
+                        template='plotly_dark',
+                        color_discrete_sequence=['#8b5cf6']
+                    )
+                    fig.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font_color='#f1f5f9'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("Нет данных о продажах")
+            except:
+                pass
+        
+        with col_info:
+            st.markdown("""
+            <div class='info-card'>
+                <h4>💡 Рекомендации от AI</h4>
+                <p>Перейдите в раздел "AI Чат" чтобы получить советы по увеличению прибыли.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Quick actions in modern grid
+        st.markdown("### ⚡ Быстрые действия")
+        
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.markdown(f"""
-            <div class='metric-card'>
-                <div class='metric-value'>{revenue['total_revenue']:,.0f} ₽</div>
-                <div class='metric-label'>Выручка (30 дней)</div>
-            </div>
-            """, unsafe_allow_html=True)
+            if st.button("📦 Показать товары", use_container_width=True):
+                st.session_state.quick_action = "products"
         
         with col2:
-            st.markdown(f"""
-            <div class='metric-card'>
-                <div class='metric-value'>{revenue['total_sales']}</div>
-                <div class='metric-label'>Продаж</div>
-            </div>
-            """, unsafe_allow_html=True)
+            if st.button("💰 Выручка", use_container_width=True):
+                st.session_state.quick_action = "revenue"
         
         with col3:
-            st.markdown(f"""
-            <div class='metric-card'>
-                <div class='metric-value'>{revenue['average_check']:,.0f} ₽</div>
-                <div class='metric-label'>Средний чек</div>
-            </div>
-            """, unsafe_allow_html=True)
+            if st.button("🔥 Топ товаров", use_container_width=True):
+                st.session_state.quick_action = "top"
         
-        # Get products count
-        products = st.session_state.agent.products.get_all_products(limit=1)
         with col4:
-            st.markdown(f"""
-            <div class='metric-card'>
-                <div class='metric-value'>{len(products) if products else '...'}+</div>
-                <div class='metric-label'>Товаров</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-    except Exception as e:
-        st.error(f"Ошибка загрузки данных: {str(e)}")
-        st.info("💡 Попробуйте обновить страницу или проверить API токен. Если ошибка повторяется - возможно, проблемы с серверами WB.")
-    
-    st.markdown("---")
-    
-    # Quick actions
-    st.markdown("### ⚡ Быстрые действия")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        if st.button("📦 Показать товары", use_container_width=True):
-            st.session_state.quick_action = "products"
-    
-    with col2:
-        if st.button("💰 Выручка за 30 дней", use_container_width=True):
-            st.session_state.quick_action = "revenue"
-    
-    with col3:
-        if st.button("🔥 Топ товаров", use_container_width=True):
-            st.session_state.quick_action = "top"
-    
-    with col4:
-        if st.button("📢 Рекламные кампании", use_container_width=True):
-            st.session_state.quick_action = "campaigns"
-    
-    # Вторая строка быстрых действий
-    st.markdown("<div style='margin-top: 0.5rem;'></div>", unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        if st.button("📊 Еженедельный отчет", use_container_width=True):
-            st.session_state.quick_action = "weekly"
-    
-    # Execute quick action
-    if 'quick_action' in st.session_state:
-        with st.spinner("Загрузка..."):
-            try:
-                if st.session_state.quick_action == "products":
-                    products = st.session_state.agent.products.get_all_products(limit=100)
-                    if products:
-                        st.success(f"Загружено {len(products)} товаров")
-                        # Convert to DataFrame with safe data extraction
-                        df_data = []
-                        for p in products:
-                            sizes = p.get('sizes', [])
-                            price = 0
-                            if sizes and len(sizes) > 0:
-                                price = sizes[0].get('price', 0)
-                            
-                            df_data.append({
-                                'Артикул': p.get('nmID'),
-                                'Название': p.get('title', '')[:50],
-                                'Артикул продавца': p.get('vendorCode', ''),
-                                'Бренд': p.get('brand', ''),
-                                'Цена': price,
-                                'Предмет': p.get('subjectName', '')
-                            })
-                        
-                        df = pd.DataFrame(df_data)
-                        st.dataframe(df, use_container_width=True)
-                    else:
-                        st.info("Нет данных о товарах")
-                        
-                elif st.session_state.quick_action == "revenue":
-                    revenue = st.session_state.agent.analytics.calculate_revenue(days=30)
-                    
-                    # Красивое отображение вместо JSON
-                    st.success(f"📊 Отчет за {revenue['period_days']} дней")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("💰 Выручка", f"{revenue['total_revenue']:,.0f} ₽")
-                    with col2:
-                        st.metric("📦 Продаж", f"{revenue['total_sales']}")
-                    with col3:
-                        st.metric("📈 Средний чек", f"{revenue['average_check']:,.0f} ₽")
-                    
-                    # Красивое отображение суммы
-                    st.markdown(f"### Итого: **{revenue['total_revenue']:,.2f} ₽**")
-                    st.markdown(f"Всего продаж: **{revenue['total_sales']}** | Средний чек: **{revenue['average_check']:,.2f} ₽**")
-                    
-                elif st.session_state.quick_action == "top":
-                    top = st.session_state.agent.analytics.get_top_products(days=30, limit=10)
-                    if top:
-                        df = pd.DataFrame(top)
-                        fig = px.bar(df, x='name', y='revenue', title='Топ товаров по выручке')
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.info("Нет данных о продажах")
-                        
-                elif st.session_state.quick_action == "campaigns":
-                    campaigns = st.session_state.agent.advertising.get_campaigns()
-                    if campaigns:
-                        st.success(f"Найдено {len(campaigns)} кампаний")
-                        df = pd.DataFrame(campaigns)
-                        st.dataframe(df, use_container_width=True)
-                    else:
-                        st.info("Нет рекламных кампаний")
-                
-                elif st.session_state.quick_action == "weekly":
-                    report = st.session_state.agent.analytics.get_weekly_sales_report()
-                    if report and not report.get('error'):
-                        st.success(f"Отчет за неделю: {report['week_start']} - {report['week_end']}")
-                        
-                        # Метрики
-                        col1, col2, col3, col4 = st.columns(4)
-                        col1.metric("Выручка", f"{report['total_revenue']:,.0f} ₽")
-                        col2.metric("Продаж", report['total_sales'])
-                        col3.metric("Возвратов", report['total_returns'])
-                        col4.metric("Средний чек", f"{report['average_check']:,.0f} ₽")
-                        
-                        # Дневная разбивка
-                        if report.get('daily_breakdown'):
-                            st.markdown("### 📈 По дням")
-                            df_daily = pd.DataFrame(report['daily_breakdown'])
-                            st.dataframe(df_daily, use_container_width=True)
-                        
-                        # Топ товары
-                        if report.get('top_products'):
-                            st.markdown("### 🏆 Топ товары")
-                            df_products = pd.DataFrame(report['top_products'][:10])
-                            st.dataframe(df_products, use_container_width=True)
-                        
-                        # Кнопка экспорта
-                        csv_filename = st.session_state.agent.analytics.export_weekly_report_csv()
-                        if csv_filename:
-                            with open(csv_filename, 'rb') as f:
-                                st.download_button(
-                                    label="📥 Скачать CSV",
-                                    data=f,
-                                    file_name=csv_filename,
-                                    mime="text/csv"
-                                )
-                    else:
-                        st.info("Нет данных за прошлую неделю")
-                        
-            except Exception as e:
-                error_msg = str(e)
-                if "429" in error_msg or "Слишком много" in error_msg or "Rate limit" in error_msg:
-                    st.error("⚠️ Превышен лимит запросов к API Wildberries")
-                    st.info("💡 Пожалуйста, подождите 1-2 минуты и попробуйте снова. Лимит: 1 запрос в минуту для статистики.")
-                else:
-                    st.error(f"❌ Ошибка: {error_msg}")
+            if st.button("📢 Реклама", use_container_width=True):
+                st.session_state.quick_action = "campaigns"
         
-        del st.session_state.quick_action
+        # Second row
+        st.markdown("<div style='margin-top: 0.75rem;'></div>", unsafe_allow_html=True)
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if st.button("📊 Отчет за неделю", use_container_width=True):
+                st.session_state.quick_action = "weekly"
+        
+        # Execute quick action
+        if 'quick_action' in st.session_state:
+            with st.spinner("Загрузка..."):
+                try:
+                    if st.session_state.quick_action == "products":
+                        products = st.session_state.agent.products.get_all_products(limit=100)
+                        if products:
+                            st.success(f"Загружено {len(products)} товаров")
+                            # Convert to DataFrame
+                            df_data = []
+                            for p in products:
+                                sizes = p.get('sizes', [])
+                                price = 0
+                                if sizes and len(sizes) > 0:
+                                    price = sizes[0].get('price', 0)
+                                
+                                df_data.append({
+                                    'Артикул': p.get('nmID'),
+                                    'Название': p.get('title', '')[:50],
+                                    'Артикул продавца': p.get('vendorCode', ''),
+                                    'Бренд': p.get('brand', ''),
+                                    'Цена': price,
+                                    'Предмет': p.get('subjectName', '')
+                                })
+                            
+                            df = pd.DataFrame(df_data)
+                            st.dataframe(df, use_container_width=True)
+                        else:
+                            st.info("Нет данных о товарах")
+                            
+                    elif st.session_state.quick_action == "revenue":
+                        revenue = st.session_state.agent.analytics.calculate_revenue(days=30)
+                        
+                        # Красивое отображение
+                        st.success(f"📊 Отчет за {revenue['period_days']} дней")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("💰 Выручка", f"{revenue['total_revenue']:,.0f} ₽")
+                        with col2:
+                            st.metric("📦 Продаж", f"{revenue['total_sales']}")
+                        with col3:
+                            st.metric("📈 Средний чек", f"{revenue['average_check']:,.0f} ₽")
+                        
+                        st.markdown(f"### Итого: **{revenue['total_revenue']:,.2f} ₽**")
+                        
+                    elif st.session_state.quick_action == "top":
+                        top = st.session_state.agent.analytics.get_top_products(days=30, limit=10)
+                        if top:
+                            df = pd.DataFrame(top)
+                            fig = px.bar(df, x='name', y='revenue', title='Топ товаров по выручке')
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.info("Нет данных о продажах")
+                            
+                    elif st.session_state.quick_action == "campaigns":
+                        campaigns = st.session_state.agent.advertising.get_campaigns()
+                        if campaigns:
+                            st.success(f"Найдено {len(campaigns)} кампаний")
+                            df = pd.DataFrame(campaigns)
+                            st.dataframe(df, use_container_width=True)
+                        else:
+                            st.info("Нет рекламных кампаний")
+                    
+                    elif st.session_state.quick_action == "weekly":
+                        report = st.session_state.agent.analytics.get_weekly_sales_report()
+                        if report and not report.get('error'):
+                            st.success(f"Отчет за неделю: {report['week_start']} - {report['week_end']}")
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            col1.metric("Выручка", f"{report['total_revenue']:,.0f} ₽")
+                            col2.metric("Продаж", report['total_sales'])
+                            col3.metric("Возвратов", report['total_returns'])
+                            col4.metric("Средний чек", f"{report['average_check']:,.0f} ₽")
+                            
+                            if report.get('daily_breakdown'):
+                                st.markdown("### 📈 По дням")
+                                df_daily = pd.DataFrame(report['daily_breakdown'])
+                                st.dataframe(df_daily, use_container_width=True)
+                            
+                            if report.get('top_products'):
+                                st.markdown("### 🏆 Топ товары")
+                                df_products = pd.DataFrame(report['top_products'][:10])
+                                st.dataframe(df_products, use_container_width=True)
+                            
+                            csv_filename = st.session_state.agent.analytics.export_weekly_report_csv()
+                            if csv_filename:
+                                with open(csv_filename, 'rb') as f:
+                                    st.download_button(
+                                        label="📥 Скачать CSV",
+                                        data=f,
+                                        file_name=csv_filename,
+                                        mime="text/csv"
+                                    )
+                        else:
+                            st.info("Нет данных за прошлую неделю")
+                            
+                except Exception as e:
+                    error_msg = str(e)
+                    if "429" in error_msg or "Rate limit" in error_msg:
+                        st.error("⚠️ Превышен лимит запросов к API")
+                        st.info("💡 Подождите 1-2 минуты и попробуйте снова.")
+                    else:
+                        st.error(f"❌ Ошибка: {error_msg}")
+            
+            del st.session_state.quick_action
+    
+    with tab_ozon:
+        st.info("Интеграция с Ozon будет доступна в следующей версии.")
 
 elif page == "💬 AI Чат":
     st.markdown("<div class='main-header'>💬 AI Ассистент Wildberries</div>", unsafe_allow_html=True)
