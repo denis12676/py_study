@@ -186,15 +186,25 @@ class WildberriesAIAgent:
                 params["bid"] = int(numbers[-1])
         
         elif action in ["sales_report", "orders_report", "top_products", "revenue_report"]:
-            # Ищем период
-            if "недел" in query_lower or "7" in query:
-                params["days"] = 7
-            elif "месяц" in query_lower or "30" in query:
-                params["days"] = 30
-            elif "год" in query_lower or "365" in query:
-                params["days"] = 365
+            # Ищем конкретную дату (форматы: 23.02.2026, 23.02.26, 23/02/2026)
+            date_match = re.search(r'(\d{1,2})[./](\d{1,2})[./](\d{2,4})', query)
+            if date_match:
+                day, month, year = date_match.groups()
+                # Формируем дату в формате YYYY-MM-DD
+                if len(year) == 2:
+                    year = '20' + year  # Предполагаем 21 век
+                params["date_from"] = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                params["days"] = 1  # Для конкретной даты берем 1 день
             else:
-                params["days"] = 30
+                # Ищем период если даты нет
+                if "недел" in query_lower or "7" in query:
+                    params["days"] = 7
+                elif "месяц" in query_lower or "30" in query:
+                    params["days"] = 30
+                elif "год" in query_lower or "365" in query:
+                    params["days"] = 365
+                else:
+                    params["days"] = 30
             
             # Ищем лимит для топа
             if "топ" in query_lower and numbers:
@@ -286,7 +296,23 @@ class WildberriesAIAgent:
             )
         
         elif action == "revenue_report":
-            return self.analytics.calculate_revenue(days=params.get("days", 30))
+            # Если указана конкретная дата, используем её
+            if "date_from" in params:
+                sales = self.analytics.get_sales(date_from=params["date_from"])
+                from datetime import datetime, timedelta
+                # Рассчитываем выручку для конкретного дня
+                total_revenue = sum(float(sale.get("forPay", 0) or 0) for sale in sales if not sale.get("isCancel", False))
+                total_sales = len([s for s in sales if not s.get("isCancel", False)])
+                avg_check = total_revenue / total_sales if total_sales > 0 else 0
+                return {
+                    "date": params["date_from"],
+                    "total_revenue": round(total_revenue, 2),
+                    "total_sales": total_sales,
+                    "average_check": round(avg_check, 2)
+                }
+            else:
+                # Используем стандартный расчет за период
+                return self.analytics.calculate_revenue(days=params.get("days", 30))
         
         elif action == "top_products":
             return self.analytics.get_top_products(
@@ -417,6 +443,15 @@ class WildberriesAIAgent:
                 print(f"{status}: {result.get('action', 'операция')}")
                 if "campaign_id" in result:
                     print(f"   Кампания ID: {result['campaign_id']}")
+            elif "date" in result and "total_revenue" in result:
+                # Выручка за конкретную дату
+                print("\n" + "="*60)
+                print(f"📅 ВЫРУЧКА ЗА {result['date']}")
+                print("="*60)
+                print(f"💰 Общая выручка:     {result['total_revenue']:,.2f} ₽")
+                print(f"📦 Продаж:            {result['total_sales']}")
+                print(f"📊 Средний чек:       {result['average_check']:,.2f} ₽")
+                print("="*60)
             elif "week_start" in result:
                 # Еженедельный отчет
                 print("\n" + "="*70)
