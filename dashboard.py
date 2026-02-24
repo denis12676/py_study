@@ -111,31 +111,56 @@ st.sidebar.markdown("---")
 if not st.session_state.agent:
     st.sidebar.markdown("### 🔑 API Токен")
     
-    # Try to load from Streamlit secrets (for cloud deployment)
-    token = ""
+    # Check if token exists in Streamlit secrets (for cloud deployment)
+    token_from_secrets = ""
     try:
-        token = st.secrets.get("WB_API_TOKEN", "")
-        if token:
-            st.sidebar.info("🔒 Токен загружен из Secrets (безопасно)")
+        token_from_secrets = st.secrets.get("WB_API_TOKEN", "")
     except:
         pass  # No secrets configured
     
-    # Try to load from .env file (for local development)
-    if not token:
+    # Check if token exists in .env file (for local development)
+    token_from_env = ""
+    if not token_from_secrets:
         env_path = os.path.join(os.path.dirname(__file__), '.env')
         if os.path.exists(env_path):
             with open(env_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     if line.startswith('WB_API_TOKEN='):
-                        token = line.strip().split('=', 1)[1].strip('\'"')
+                        token_from_env = line.strip().split('=', 1)[1].strip('\'"')
                         break
     
-    api_token = st.sidebar.text_input(
-        "Вvedite token WB API:", 
-        value=token,
-        type="password",
-        placeholder="Vash API token"
-    )
+    # Determine which token to use (prioritize secrets)
+    saved_token = token_from_secrets or token_from_env
+    use_saved = False  # Default value
+    
+    if saved_token:
+        # Token exists - show secure indicator but NOT the token itself
+        st.sidebar.success("🔒 Токен настроен (безопасно)")
+        st.sidebar.markdown("*Токен загружен из защищенного хранилища*")
+        
+        # Checkbox to use saved token
+        use_saved = st.sidebar.checkbox("Использовать сохраненный токен", value=True)
+        
+        if use_saved:
+            api_token = saved_token  # Use token but don't show it
+            st.sidebar.markdown("<div style='color: green;'>✓ Токен будет использован автоматически</div>", unsafe_allow_html=True)
+        else:
+            # User wants to enter new token
+            api_token = st.sidebar.text_input(
+                "Введите новый токен WB API:", 
+                value="",
+                type="password",
+                placeholder="Введите токен"
+            )
+    else:
+        # No saved token - show empty input
+        api_token = st.sidebar.text_input(
+            "Введите токен WB API:", 
+            value="",
+            type="password",
+            placeholder="Введите токен"
+        )
+        st.sidebar.info("💡 Токен можно получить в личном кабинете WB: Профиль → API Интеграции")
     
     if st.sidebar.button("🚀 Подключиться", type="primary"):
         if api_token:
