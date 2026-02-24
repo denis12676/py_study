@@ -474,13 +474,172 @@ else:
         st.session_state.agent = None
         st.rerun()
     
-    st.sidebar.markdown("---")
+    st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
 
-# Main navigation
-page = st.sidebar.radio(
-    "📍 Навигация",
-    ["🏠 Главная", "💬 AI Чат", "📦 Товары", "📋 Остатки", "📊 Аналитика", "📢 Реклама"]
-)
+# Initialize page in session state
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = "🏠 Главная"
+
+# Custom Sidebar Navigation with Icons
+st.sidebar.markdown("""
+<style>
+    .nav-menu {
+        padding: 0;
+        margin: 0;
+    }
+    .nav-item {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        margin: 0.25rem 0;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #94a3b8;
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+    .nav-item:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #f1f5f9;
+    }
+    .nav-item.active {
+        background-color: rgba(139, 92, 246, 0.15);
+        color: #8b5cf6;
+    }
+    .nav-item svg, .nav-item .icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+    .nav-item .badge {
+        margin-left: auto;
+        background-color: #8b5cf6;
+        color: white;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+    .nav-item .badge-red {
+        background-color: #ef4444;
+    }
+    .nav-section-title {
+        color: #94a3b8;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 1.5rem 0 0.5rem 0;
+        padding-left: 1rem;
+    }
+    .nav-submenu {
+        padding-left: 1.5rem;
+        margin: 0.25rem 0;
+    }
+    .nav-submenu .nav-item {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+    }
+    .nav-item-expandable {
+        justify-content: space-between;
+    }
+    .nav-item-expandable .arrow {
+        transition: transform 0.2s;
+        margin-left: auto;
+    }
+    .nav-item-expandable.expanded .arrow {
+        transform: rotate(180deg);
+    }
+</style>
+
+<script>
+    function navigateTo(page) {
+        // Set the page in Streamlit session state via st.query_params
+        window.parent.postMessage({
+            type: 'streamlit:setSessionState',
+            data: { current_page: page }
+        }, '*');
+    }
+</script>
+""", unsafe_allow_html=True)
+
+# Manual navigation using buttons styled as links
+with st.sidebar:
+    # Analytics section
+    st.markdown("<div class='nav-section-title'>Аналитика</div>", unsafe_allow_html=True)
+    
+    cols = st.columns([0.15, 0.85])
+    with cols[0]:
+        st.markdown("📊", unsafe_allow_html=True)
+    with cols[1]:
+        if st.button("📊 Аналитика", key="nav_analytics", use_container_width=True, 
+                     type="secondary" if st.session_state.current_page != "📊 Аналитика" else "primary"):
+            st.session_state.current_page = "📊 Аналитика"
+            st.rerun()
+    
+    # Products section
+    st.markdown("<div class='nav-section-title'>Товары</div>", unsafe_allow_html=True)
+    
+    cols = st.columns([0.15, 0.85])
+    with cols[0]:
+        st.markdown("📦", unsafe_allow_html=True)
+    with cols[1]:
+        if st.button("📦 Товары", key="nav_products", use_container_width=True,
+                     type="secondary" if st.session_state.current_page != "📦 Товары" else "primary"):
+            st.session_state.current_page = "📦 Товары"
+            st.rerun()
+    
+    # Inventory section with submenu
+    st.markdown("<div class='nav-section-title'>Склад и остатки</div>", unsafe_allow_html=True)
+    
+    cols = st.columns([0.15, 0.85])
+    with cols[0]:
+        st.markdown("📋", unsafe_allow_html=True)
+    with cols[1]:
+        if st.button("📋 Остатки", key="nav_inventory", use_container_width=True,
+                     type="secondary" if st.session_state.current_page != "📋 Остатки" else "primary"):
+            st.session_state.current_page = "📋 Остатки"
+            st.rerun()
+    
+    # AI Chat
+    st.markdown("<div class='nav-section-title'>AI Помощник</div>", unsafe_allow_html=True)
+    
+    cols = st.columns([0.15, 0.85])
+    with cols[0]:
+        st.markdown("💬", unsafe_allow_html=True)
+    with cols[1]:
+        if st.button("💬 AI Чат", key="nav_chat", use_container_width=True,
+                     type="secondary" if st.session_state.current_page != "💬 AI Чат" else "primary"):
+            st.session_state.current_page = "💬 AI Чат"
+            st.rerun()
+    
+    # Advertising
+    st.markdown("<div class='nav-section-title'>Маркетинг</div>", unsafe_allow_html=True)
+    
+    cols = st.columns([0.15, 0.85])
+    with cols[0]:
+        st.markdown("📢", unsafe_allow_html=True)
+    with cols[1]:
+        if st.button("📢 Реклама", key="nav_ads", use_container_width=True,
+                     type="secondary" if st.session_state.current_page != "📢 Реклама" else "primary"):
+            st.session_state.current_page = "📢 Реклама"
+            st.rerun()
+    
+    st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+    
+    # Home button at bottom
+    cols = st.columns([0.15, 0.85])
+    with cols[0]:
+        st.markdown("🏠", unsafe_allow_html=True)
+    with cols[1]:
+        if st.button("🏠 Главная", key="nav_home", use_container_width=True,
+                     type="secondary" if st.session_state.current_page != "🏠 Главная" else "primary"):
+            st.session_state.current_page = "🏠 Главная"
+            st.rerun()
+
+page = st.session_state.current_page
 
 # Main content
 if page == "🏠 Главная":
