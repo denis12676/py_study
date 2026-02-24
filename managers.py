@@ -610,6 +610,7 @@ class ProductsManager:
                 }
             
             print(f"INFO: Получено {len(product_mapping)} товаров для FBO")
+            print(f"DEBUG: Первые 3 товара из mapping: {list(product_mapping.items())[:3]}")
             
             # Теперь получаем остатки FBO с детализацией
             today = datetime.now().strftime("%Y-%m-%d")
@@ -643,6 +644,11 @@ class ProductsManager:
             if isinstance(response, dict) and 'data' in response:
                 data = response['data']
                 groups = data.get('groups', [])
+                print(f"DEBUG: API вернул {len(groups)} групп товаров")
+                
+                for group in groups[:3]:  # Первые 3 для отладки
+                    nm_id = group.get('nmID')
+                    print(f"DEBUG: Обрабатываем nmID={nm_id}, есть в mapping: {nm_id in product_mapping}")
                 
                 for group in groups:
                     nm_id = group.get('nmID')
@@ -663,7 +669,20 @@ class ProductsManager:
                             'stockCount': total_stock,
                             'stocks': stocks
                         })
+                    elif nm_id:
+                        # nmID есть в API ответе, но нет в mapping
+                        print(f"DEBUG: nmID {nm_id} не найден в product_mapping")
+                        result.append({
+                            'nmId': nm_id,
+                            'vendorCode': '',
+                            'title': '',
+                            'brand': '',
+                            'subject': '',
+                            'stockCount': sum(s.get('stock', 0) for s in group.get('stocks', [])),
+                            'stocks': group.get('stocks', [])
+                        })
             
+            print(f"INFO: Сформировано {len(result)} записей с товарами")
             return result
             
         except Exception as e:

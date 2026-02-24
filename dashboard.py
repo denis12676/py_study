@@ -159,6 +159,16 @@ st.markdown("""
         border: 1px solid var(--border-color);
         border-radius: 12px;
         overflow: hidden;
+        max-width: 100%;
+    }
+    
+    .stDataFrame > div {
+        overflow-x: auto !important;
+    }
+    
+    .stDataFrame table {
+        width: 100%;
+        table-layout: auto;
     }
     
     .stDataFrame thead th {
@@ -166,11 +176,21 @@ st.markdown("""
         color: var(--text-primary);
         font-weight: 600;
         border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+        padding: 0.75rem 1rem;
     }
     
     .stDataFrame tbody td {
         color: var(--text-secondary);
         border-bottom: 1px solid var(--border-color);
+        padding: 0.5rem 1rem;
+        white-space: nowrap;
+    }
+    
+    /* Main content container */
+    .main .block-container {
+        max-width: 100%;
+        padding: 2rem;
     }
     
     /* Tabs */
