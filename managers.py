@@ -12,6 +12,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import time
 import json
+import csv
+import io
 from wb_client import WildberriesAPI, WBConfig, API_ENDPOINTS
 
 
@@ -512,25 +514,31 @@ class ProductsManager:
     
     def get_fbo_stocks_full(self) -> List[Dict]:
         """
-        Получить полные остатки FBO через Statistics API с пагинацией.
-        
-        Использует GET /api/v1/supplier/stocks из Statistics API.
-        Идёт пачками по полю lastChangeDate, пока API не начнёт возвращать пустой список.
-        
+        Получить полные остатки FBO через Statistics API строго по документации к
+        методу GET /api/v1/supplier/stocks.
+
+        Логика соответствует описанию из docs:
+        - используем максимально раннюю дату в параметре dateFrom,
+        - делаем первый запрос;
+        - во втором и последующих запросах в dateFrom передаём полное значение
+          поля lastChangeDate из последней строки предыдущего ответа;
+        - как только API вернуло пустой массив [], считаем, что все остатки выгружены.
+
         Returns:
-            Список записей с полной информацией об остатках
+            Список записей с полной информацией об остатках FBO
         """
         try:
-            print("DEBUG: Начинаем загрузку всех остатков FBO через /api/v1/supplier/stocks с пагинацией")
-
-            # Стартовая точка — год назад, без времени (только дата)
-            date_from = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+            # Максимально ранняя дата для первой выгрузки (как рекомендует документация)
+            date_from = "2019-06-20T00:00:00"
             all_data: List[Dict] = []
             iteration = 0
 
             while True:
                 iteration += 1
-                print(f"DEBUG: Итерация {iteration}, запрос с dateFrom={date_from}")
+                print(
+                    f"DEBUG: supplier/stocks итерация {iteration}, "
+                    f"dateFrom={date_from}"
+                )
 
                 response = self.api.get(
                     "/api/v1/supplier/stocks",
@@ -546,11 +554,17 @@ class ProductsManager:
                     # На всякий случай поддерживаем формат с ключом 'stocks'
                     batch = response.get("stocks", [])
                 else:
-                    print(f"WARNING: Неожиданный формат ответа: {type(response)} - {response}")
+                    print(
+                        f"WARNING: Неожиданный формат ответа: "
+                        f"{type(response)} - {response}"
+                    )
                     break
 
                 if not batch:
-                    print("INFO: Пустой батч, считаем что остатки полностью выгружены")
+                    print(
+                        "INFO: API вернул пустой массив [], "
+                        "считаем что все остатки выгружены"
+                    )
                     break
 
                 print(f"INFO: Получено записей в батче: {len(batch)}")
@@ -560,20 +574,142 @@ class ProductsManager:
                 last_change = last_record.get("lastChangeDate")
 
                 if not last_change:
-                    print("WARNING: В последней записи нет lastChangeDate, прекращаем пагинацию чтобы избежать бесконечного цикла")
+                    print(
+                        "WARNING: В последней записи нет lastChangeDate, "
+                        "прекращаем пагинацию чтобы избежать бесконечного цикла"
+                    )
                     break
 
-                # Обновляем дату для следующего запроса (как в fetchStocksBatch в googleapi.txt)
+                # Согласно документации, во втором и далее запросах
+                # в dateFrom нужно передавать полное значение lastChangeDate
                 date_from = last_change
 
-                # Небольшая пауза между запросами, чтобы не упереться в rate limit
-                time.sleep(1)
-
-            print(f"INFO: Всего получено {len(all_data)} записей остатков FBO")
+            print(
+                f"INFO: Всего получено {len(all_data)} записей остатков FBO "
+                "через /api/v1/supplier/stocks"
+            )
+            if all_data:
+                print(f"DEBUG: Первая запись: {all_data[0]}")
             return all_data
 
         except Exception as e:
             print(f"ERROR: Ошибка получения полных остатков FBO: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def get_fbo_stocks_with_article(self) -> List[Dict]:
+        """
+        Получить остатки FBO с supplierArticle
+        
+        Использует рабочий Analytics API + Content API для получения supplierArticle.
+        Это обходной путь, т.к. /api/v1/supplier/stocks возвращает пустой массив.
+        
+        Returns:
+            Список товаров с остатками и supplierArticle
+        """
+        try:
+            print("DEBUG: Начинаем загрузку FBO через Analytics API + Content API")
+            
+            # 1. Получаем маппинг nmId -> supplierArticle из Content API
+            print("DEBUG: Загружаем маппинг nmId -> supplierArticle...")
+            nm_to_article = {}
+            cursor = {"limit": 100}
+            
+            while True:
+                response = self.api.post(
+                    "/content/v2/get/cards/list",
+                    data={
+                        "settings": {
+                            "cursor": cursor,
+                            "filter": {"withPhoto": -1}
+                        }
+                    },
+                    base_url=API_ENDPOINTS["content"]
+                )
+                
+                if not isinstance(response, dict):
+                    break
+                
+                cards = response.get('cards', [])
+                if not cards:
+                    break
+                
+                for card in cards:
+                    nm_id = card.get('nmID')
+                    if nm_id:
+                        nm_to_article[nm_id] = card.get('vendorCode', '')
+                
+                response_cursor = response.get('cursor', {})
+                total = response_cursor.get('total', 0)
+                
+                if len(cards) < 100 or len(nm_to_article) >= total:
+                    break
+                
+                last_card = cards[-1]
+                cursor = {
+                    "limit": 100,
+                    "updatedAt": last_card.get('updatedAt'),
+                    "nmID": last_card.get('nmID')
+                }
+            
+            print(f"DEBUG: Загружено {len(nm_to_article)} товаров из Content API")
+            
+            # 2. Получаем остатки из Analytics API
+            print("DEBUG: Загружаем остатки из Analytics API...")
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            response = self.api.post(
+                "/api/v2/stocks-report/products/groups",
+                data={
+                    "nmIDs": [],
+                    "subjectIDs": [],
+                    "brandNames": [],
+                    "tagIDs": [],
+                    "currentPeriod": {
+                        "start": today,
+                        "end": today
+                    },
+                    "stockType": "wb",
+                    "skipDeletedNm": True,
+                    "availabilityFilters": [],
+                    "orderBy": {
+                        "field": "avgOrders",
+                        "mode": "asc"
+                    },
+                    "limit": 1000,
+                    "offset": 0
+                },
+                base_url=API_ENDPOINTS["analytics"]
+            )
+            
+            result = []
+            if isinstance(response, dict) and 'data' in response:
+                data = response['data']
+                groups = data.get('groups', [])
+                
+                print(f"DEBUG: Получено {len(groups)} групп из Analytics API")
+                
+                for group in groups:
+                    nm_id = group.get('nmID')
+                    stocks = group.get('stocks', [])
+                    total_stock = sum(s.get('stock', 0) for s in stocks)
+                    
+                    # Добавляем supplierArticle из маппинга
+                    supplier_article = nm_to_article.get(nm_id, '')
+                    
+                    result.append({
+                        'nmId': nm_id,
+                        'supplierArticle': supplier_article,
+                        'stockCount': total_stock,
+                        'stocks': stocks
+                    })
+            
+            print(f"INFO: Сформировано {len(result)} записей с supplierArticle")
+            return result
+            
+        except Exception as e:
+            print(f"ERROR: Ошибка получения FBO с supplierArticle: {e}")
             import traceback
             traceback.print_exc()
             return []

@@ -1110,30 +1110,29 @@ elif page == "📋 Остатки":
         if st.button("🔄 Загрузить остатки FBO", type="primary", key="fbo_load"):
             with st.spinner("Загрузка остатков FBO..."):
                 try:
-                    # Загружаем полные остатки FBO
-                    stocks = st.session_state.agent.products.get_fbo_stocks_full()
-                    st.session_state.fbo_stocks_full = stocks
+                    print("UI: Старт загрузки остатков FBO через get_fbo_stocks_with_article()")
+                    # Используем новый метод, который работает через Analytics API + Content API
+                    stocks = st.session_state.agent.products.get_fbo_stocks_with_article()
+                    print(f"UI: get_fbo_stocks_with_article() вернул {len(stocks) if isinstance(stocks, list) else 'не-список'} записей")
+                    st.session_state.fbo_stocks = stocks
                     
                     if stocks:
                         st.success(f"✅ Загружено {len(stocks)} записей")
                         
-                        # Создаем DataFrame с полными данными
+                        # Создаем DataFrame с данными
                         df_data = []
                         for s in stocks:
                             df_data.append({
                                 'Артикул продавца': s.get('supplierArticle', ''),
                                 'Артикул WB': s.get('nmId', ''),
-                                'Баркод': s.get('barcode', ''),
-                                'Количество': s.get('quantity', 0),
-                                'Склад': s.get('warehouseName', ''),
-                                'Дата изменения': s.get('lastChangeDate', '')
+                                'Остаток': s.get('stockCount', 0)
                             })
                         
                         df = pd.DataFrame(df_data)
                         st.dataframe(df)
                         
                         # Скачать CSV (только артикул и количество)
-                        df_simple = df[['Артикул продавца', 'Количество']].copy()
+                        df_simple = df[['Артикул продавца', 'Остаток']].copy()
                         csv = df_simple.to_csv(index=False).encode('utf-8')
                         st.download_button(
                             "📥 Скачать CSV (артикул + количество)",
@@ -1153,11 +1152,14 @@ elif page == "📋 Остатки":
                             key="fbo_full_download"
                         )
                     else:
+                        print("UI: get_fbo_stocks_with_article() вернул пустой список, показываем сообщение в UI")
                         st.info("Нет данных о остатках FBO.")
                         
                 except Exception as e:
-                    st.error(f"Ошибка загрузки: {e}")
+                    print(f"UI ERROR: исключение при загрузке остатков FBO: {e}")
                     import traceback
+                    traceback.print_exc()
+                    st.error(f"Ошибка загрузки: {e}")
                     st.code(traceback.format_exc())
 
 elif page == "📊 Аналитика":
