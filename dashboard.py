@@ -1114,111 +1114,48 @@ elif page == "📋 Остатки":
                     result_summary = st.session_state.agent.products.get_fbo_stocks()
                     st.session_state.fbo_stocks = result_summary
                     
-                    # Загружаем детали по товарам
-                    products = st.session_state.agent.products.get_fbo_stocks_detailed()
-                    st.session_state.fbo_products = products
+                    # Загружаем полные остатки FBO
+                    stocks = st.session_state.agent.products.get_fbo_stocks_full()
+                    st.session_state.fbo_stocks_full = stocks
                     
-                    regions = result_summary.get('regions', [])
-                    
-                    if regions or products:
-                        # Общая сводка
-                        st.success(f"✅ Загружено: {len(regions)} регионов, {len(products)} товаров")
+                    if stocks:
+                        st.success(f"✅ Загружено {len(stocks)} записей")
                         
-                        # Общие метрики
-                        total_stock_count = 0
-                        total_stock_sum = 0
-                        total_offices = 0
-                        
-                        for region in regions:
-                            metrics = region.get('metrics', {})
-                            total_stock_count += metrics.get('stockCount', 0)
-                            total_stock_sum += metrics.get('stockSum', 0)
-                            total_offices += len(region.get('offices', []))
-                        
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Всего товаров", f"{total_stock_count:,}")
-                        with col2:
-                            st.metric("Сумма остатков", f"{total_stock_sum:,} ₽")
-                        with col3:
-                            st.metric("Количество складов", total_offices)
-                        
-                        st.markdown("---")
-                        
-                        # СВОДКА ПО РЕГИОНАМ И СКЛАДАМ
-                        st.markdown("#### 📊 Сводка по регионам")
-                        df_regions = []
-                        for region in regions:
-                            metrics = region.get('metrics', {})
-                            df_regions.append({
-                                'Регион': region.get('regionName', ''),
-                                'Товаров': metrics.get('stockCount', 0),
-                                'Сумма остатков': f"{metrics.get('stockSum', 0):,} ₽",
-                                'Количество складов': len(region.get('offices', []))
+                        # Создаем DataFrame с полными данными
+                        df_data = []
+                        for s in stocks:
+                            df_data.append({
+                                'Артикул продавца': s.get('supplierArticle', ''),
+                                'Артикул WB': s.get('nmId', ''),
+                                'Баркод': s.get('barcode', ''),
+                                'Количество': s.get('quantity', 0),
+                                'Склад': s.get('warehouseName', ''),
+                                'Дата изменения': s.get('lastChangeDate', '')
                             })
                         
-                        if df_regions:
-                            df = pd.DataFrame(df_regions)
-                            st.dataframe(df)
+                        df = pd.DataFrame(df_data)
+                        st.dataframe(df)
                         
-                        # Детализация по складам
-                        st.markdown("#### 📋 Детализация по складам")
-                        all_offices = []
-                        for region in regions:
-                            for office in region.get('offices', []):
-                                metrics = office.get('metrics', {})
-                                all_offices.append({
-                                    'Регион': region.get('regionName', ''),
-                                    'Склад': office.get('officeName', ''),
-                                    'ID склада': office.get('officeID', ''),
-                                    'Товаров': metrics.get('stockCount', 0),
-                                    'Сумма остатков': f"{metrics.get('stockSum', 0):,} ₽"
-                                })
+                        # Скачать CSV (только артикул и количество)
+                        df_simple = df[['Артикул продавца', 'Количество']].copy()
+                        csv = df_simple.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            "📥 Скачать CSV (артикул + количество)",
+                            csv,
+                            "fbo_stocks_simple.csv",
+                            "text/csv",
+                            key="fbo_simple_download"
+                        )
                         
-                        if all_offices:
-                            df_offices = pd.DataFrame(all_offices)
-                            st.dataframe(df_offices)
-                        
-                        st.markdown("---")
-                        
-                        # ДЕТАЛИ ПО ТОВАРАМ
-                        if products:
-                            st.markdown(f"#### 📦 Детали по товарам ({len(products)} товаров)")
-                            
-                            df_data = []
-                            for p in products:
-                                df_data.append({
-                                    'Артикул WB': p.get('nmId', ''),
-                                    'Артикул продавца': p.get('vendorCode', ''),
-                                    'Название': p.get('title', '')[:60],
-                                    'Бренд': p.get('brand', ''),
-                                    'Категория': p.get('subject', ''),
-                                    'Остаток': p.get('stockCount', 0)
-                                })
-                            
-                            df = pd.DataFrame(df_data)
-                            st.dataframe(df)
-                            
-                            # Скачать CSV
-                            csv = df.to_csv(index=False).encode('utf-8')
-                            st.download_button(
-                                "📥 Скачать CSV (товары)",
-                                csv,
-                                "fbo_products.csv",
-                                "text/csv",
-                                key="fbo_products_download"
-                            )
-                        
-                        # CSV по складам
-                        if all_offices:
-                            csv_offices = df_offices.to_csv(index=False).encode('utf-8')
-                            st.download_button(
-                                "📥 Скачать CSV (склады)",
-                                csv_offices,
-                                "fbo_warehouses.csv",
-                                "text/csv",
-                                key="fbo_warehouses_download"
-                            )
+                        # Скачать CSV (полные данные)
+                        csv_full = df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            "📥 Скачать CSV (полные данные)",
+                            csv_full,
+                            "fbo_stocks_full.csv",
+                            "text/csv",
+                            key="fbo_full_download"
+                        )
                     else:
                         st.info("Нет данных о остатках FBO.")
                         

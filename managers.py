@@ -510,6 +510,42 @@ class ProductsManager:
             traceback.print_exc()
             return {}
     
+    def get_fbo_stocks_full(self) -> List[Dict]:
+        """
+        Получить полные остатки FBO через API v1 (supplier/stocks)
+        
+        Использует GET /api/v1/supplier/stocks из Statistics API
+        Возвращает всю информацию: warehouseName, supplierArticle, nmId, barcode, quantity и т.д.
+        
+        Returns:
+            Список записей с полной информацией об остатках
+        """
+        try:
+            # Используем текущую дату
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            response = self.api.get(
+                "/api/v1/supplier/stocks",
+                params={
+                    "dateFrom": today,
+                    "flag": 0  # 0 = все остатки
+                },
+                base_url=API_ENDPOINTS["statistics"]
+            )
+            
+            if isinstance(response, list):
+                print(f"INFO: Получено {len(response)} записей из supplier/stocks")
+                return response
+            else:
+                print(f"WARNING: Неожиданный формат ответа: {type(response)}")
+                return []
+                
+        except Exception as e:
+            print(f"ERROR: Ошибка получения полных остатков FBO: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
     def get_fbo_stocks(self) -> Dict:
         """
         Получить остатки на складах WB (FBO)
