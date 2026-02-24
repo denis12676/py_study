@@ -480,164 +480,150 @@ else:
 if 'current_page' not in st.session_state:
     st.session_state.current_page = "🏠 Главная"
 
-# Custom Sidebar Navigation with Icons
+# Compact Sidebar Navigation (like reference)
 st.sidebar.markdown("""
 <style>
-    .nav-menu {
-        padding: 0;
-        margin: 0;
+    .nav-section {
+        margin-bottom: 1.5rem;
+    }
+    .nav-section-title {
+        color: #94a3b8;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 0 0 0.5rem 0;
+        padding-left: 2.5rem;
+        font-weight: 600;
     }
     .nav-item {
         display: flex;
         align-items: center;
-        padding: 0.75rem 1rem;
-        margin: 0.25rem 0;
-        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        margin: 0.1rem 0;
+        border-radius: 6px;
         cursor: pointer;
-        transition: all 0.2s;
-        color: #94a3b8;
-        text-decoration: none;
+        transition: all 0.15s ease;
+        color: #cbd5e1;
         font-size: 0.9rem;
         font-weight: 500;
+        text-decoration: none;
+        border: none;
+        background: transparent;
+        width: 100%;
     }
     .nav-item:hover {
-        background-color: rgba(255, 255, 255, 0.05);
+        background-color: rgba(255, 255, 255, 0.03);
         color: #f1f5f9;
     }
     .nav-item.active {
-        background-color: rgba(139, 92, 246, 0.15);
-        color: #8b5cf6;
+        background-color: #8b5cf6;
+        color: white;
     }
-    .nav-item svg, .nav-item .icon {
-        width: 20px;
-        height: 20px;
-        margin-right: 12px;
-        flex-shrink: 0;
+    .nav-item .icon {
+        width: 18px;
+        height: 18px;
+        margin-right: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+    }
+    .nav-submenu {
+        padding-left: 2.5rem;
+        margin: 0;
+    }
+    .nav-submenu .nav-item {
+        padding: 0.35rem 0.75rem;
+        font-size: 0.85rem;
+        color: #94a3b8;
+    }
+    .nav-submenu .nav-item:hover {
+        color: #f1f5f9;
     }
     .nav-item .badge {
         margin-left: auto;
         background-color: #8b5cf6;
         color: white;
-        font-size: 0.7rem;
-        padding: 0.2rem 0.5rem;
-        border-radius: 10px;
+        font-size: 0.65rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 8px;
         font-weight: 600;
     }
-    .nav-item .badge-red {
-        background-color: #ef4444;
-    }
-    .nav-section-title {
-        color: #94a3b8;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin: 1.5rem 0 0.5rem 0;
-        padding-left: 1rem;
-    }
-    .nav-submenu {
-        padding-left: 1.5rem;
-        margin: 0.25rem 0;
-    }
-    .nav-submenu .nav-item {
+    /* Hide button default styling */
+    .stButton > button[kind="secondary"] {
+        background: transparent;
+        border: none;
+        color: #cbd5e1;
+        font-weight: 500;
         padding: 0.5rem 1rem;
-        font-size: 0.85rem;
+        text-align: left;
+        box-shadow: none;
     }
-    .nav-item-expandable {
-        justify-content: space-between;
+    .stButton > button[kind="secondary"]:hover {
+        background: rgba(255, 255, 255, 0.03);
+        color: #f1f5f9;
+        border: none;
+        box-shadow: none;
     }
-    .nav-item-expandable .arrow {
-        transition: transform 0.2s;
-        margin-left: auto;
+    .stButton > button[kind="primary"] {
+        background: #8b5cf6;
+        border: none;
+        color: white;
+        font-weight: 500;
+        padding: 0.5rem 1rem;
+        text-align: left;
+        box-shadow: none;
     }
-    .nav-item-expandable.expanded .arrow {
-        transform: rotate(180deg);
+    .stButton > button[kind="primary"]:hover {
+        background: #7c3aed;
+        border: none;
+        box-shadow: none;
     }
 </style>
-
-<script>
-    function navigateTo(page) {
-        // Set the page in Streamlit session state via st.query_params
-        window.parent.postMessage({
-            type: 'streamlit:setSessionState',
-            data: { current_page: page }
-        }, '*');
-    }
-</script>
 """, unsafe_allow_html=True)
 
-# Manual navigation using buttons styled as links
-with st.sidebar:
-    # Analytics section
-    st.markdown("<div class='nav-section-title'>Аналитика</div>", unsafe_allow_html=True)
-    
-    cols = st.columns([0.15, 0.85])
-    with cols[0]:
-        st.markdown("📊", unsafe_allow_html=True)
-    with cols[1]:
-        if st.button("📊 Аналитика", key="nav_analytics", use_container_width=True, 
-                     type="secondary" if st.session_state.current_page != "📊 Аналитика" else "primary"):
-            st.session_state.current_page = "📊 Аналитика"
-            st.rerun()
-    
-    # Products section
-    st.markdown("<div class='nav-section-title'>Товары</div>", unsafe_allow_html=True)
-    
-    cols = st.columns([0.15, 0.85])
-    with cols[0]:
-        st.markdown("📦", unsafe_allow_html=True)
-    with cols[1]:
-        if st.button("📦 Товары", key="nav_products", use_container_width=True,
-                     type="secondary" if st.session_state.current_page != "📦 Товары" else "primary"):
-            st.session_state.current_page = "📦 Товары"
-            st.rerun()
-    
-    # Inventory section with submenu
-    st.markdown("<div class='nav-section-title'>Склад и остатки</div>", unsafe_allow_html=True)
-    
-    cols = st.columns([0.15, 0.85])
-    with cols[0]:
-        st.markdown("📋", unsafe_allow_html=True)
-    with cols[1]:
-        if st.button("📋 Остатки", key="nav_inventory", use_container_width=True,
-                     type="secondary" if st.session_state.current_page != "📋 Остатки" else "primary"):
-            st.session_state.current_page = "📋 Остатки"
-            st.rerun()
-    
-    # AI Chat
-    st.markdown("<div class='nav-section-title'>AI Помощник</div>", unsafe_allow_html=True)
-    
-    cols = st.columns([0.15, 0.85])
-    with cols[0]:
-        st.markdown("💬", unsafe_allow_html=True)
-    with cols[1]:
-        if st.button("💬 AI Чат", key="nav_chat", use_container_width=True,
-                     type="secondary" if st.session_state.current_page != "💬 AI Чат" else "primary"):
-            st.session_state.current_page = "💬 AI Чат"
-            st.rerun()
-    
-    # Advertising
-    st.markdown("<div class='nav-section-title'>Маркетинг</div>", unsafe_allow_html=True)
-    
-    cols = st.columns([0.15, 0.85])
-    with cols[0]:
-        st.markdown("📢", unsafe_allow_html=True)
-    with cols[1]:
-        if st.button("📢 Реклама", key="nav_ads", use_container_width=True,
-                     type="secondary" if st.session_state.current_page != "📢 Реклама" else "primary"):
-            st.session_state.current_page = "📢 Реклама"
-            st.rerun()
-    
-    st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
-    
-    # Home button at bottom
-    cols = st.columns([0.15, 0.85])
-    with cols[0]:
-        st.markdown("🏠", unsafe_allow_html=True)
-    with cols[1]:
-        if st.button("🏠 Главная", key="nav_home", use_container_width=True,
-                     type="secondary" if st.session_state.current_page != "🏠 Главная" else "primary"):
-            st.session_state.current_page = "🏠 Главная"
-            st.rerun()
+# Analytics Section
+st.sidebar.markdown("<div class='nav-section-title'>Аналитика</div>", unsafe_allow_html=True)
+if st.sidebar.button("📊 Аналитика", key="nav_analytics", use_container_width=True,
+             type="primary" if st.session_state.current_page == "📊 Аналитика" else "secondary"):
+    st.session_state.current_page = "📊 Аналитика"
+    st.rerun()
+
+# Products Section
+st.sidebar.markdown("<div class='nav-section-title'>Товары</div>", unsafe_allow_html=True)
+if st.sidebar.button("📦 Товары", key="nav_products", use_container_width=True,
+             type="primary" if st.session_state.current_page == "📦 Товары" else "secondary"):
+    st.session_state.current_page = "📦 Товары"
+    st.rerun()
+
+# Inventory Section
+st.sidebar.markdown("<div class='nav-section-title'>Склад и остатки</div>", unsafe_allow_html=True)
+if st.sidebar.button("📋 Остатки", key="nav_inventory", use_container_width=True,
+             type="primary" if st.session_state.current_page == "📋 Остатки" else "secondary"):
+    st.session_state.current_page = "📋 Остатки"
+    st.rerun()
+
+# AI Chat Section
+st.sidebar.markdown("<div class='nav-section-title'>AI Помощник</div>", unsafe_allow_html=True)
+if st.sidebar.button("💬 AI Чат", key="nav_chat", use_container_width=True,
+             type="primary" if st.session_state.current_page == "💬 AI Чат" else "secondary"):
+    st.session_state.current_page = "💬 AI Чат"
+    st.rerun()
+
+# Marketing Section
+st.sidebar.markdown("<div class='nav-section-title'>Маркетинг</div>", unsafe_allow_html=True)
+if st.sidebar.button("📢 Реклама", key="nav_ads", use_container_width=True,
+             type="primary" if st.session_state.current_page == "📢 Реклама" else "secondary"):
+    st.session_state.current_page = "📢 Реклама"
+    st.rerun()
+
+st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+
+# Home
+if st.sidebar.button("🏠 Главная", key="nav_home", use_container_width=True,
+             type="primary" if st.session_state.current_page == "🏠 Главная" else "secondary"):
+    st.session_state.current_page = "🏠 Главная"
+    st.rerun()
 
 page = st.session_state.current_page
 
