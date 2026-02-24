@@ -403,7 +403,7 @@ if not st.session_state.agent:
         )
         st.sidebar.info("💡 Токен можно получить в личном кабинете WB: Профиль → API Интеграции")
     
-    if st.sidebar.button("🚀 Подключиться", type="primary", use_container_width=True):
+    if st.sidebar.button("🚀 Подключиться", type="primary", width='stretch'):
         if api_token:
             try:
                 with st.spinner("Подключение к WB API..."):
@@ -584,35 +584,35 @@ st.sidebar.markdown("""
 
 # Analytics Section
 st.sidebar.markdown("<div class='nav-section-title'>Аналитика</div>", unsafe_allow_html=True)
-if st.sidebar.button("📊 Аналитика", key="nav_analytics", use_container_width=True,
+if st.sidebar.button("📊 Аналитика", key="nav_analytics", width='stretch',
              type="primary" if st.session_state.current_page == "📊 Аналитика" else "secondary"):
     st.session_state.current_page = "📊 Аналитика"
     st.rerun()
 
 # Products Section
 st.sidebar.markdown("<div class='nav-section-title'>Товары</div>", unsafe_allow_html=True)
-if st.sidebar.button("📦 Товары", key="nav_products", use_container_width=True,
+if st.sidebar.button("📦 Товары", key="nav_products", width='stretch',
              type="primary" if st.session_state.current_page == "📦 Товары" else "secondary"):
     st.session_state.current_page = "📦 Товары"
     st.rerun()
 
 # Inventory Section
 st.sidebar.markdown("<div class='nav-section-title'>Склад и остатки</div>", unsafe_allow_html=True)
-if st.sidebar.button("📋 Остатки", key="nav_inventory", use_container_width=True,
+if st.sidebar.button("📋 Остатки", key="nav_inventory", width='stretch',
              type="primary" if st.session_state.current_page == "📋 Остатки" else "secondary"):
     st.session_state.current_page = "📋 Остатки"
     st.rerun()
 
 # AI Chat Section
 st.sidebar.markdown("<div class='nav-section-title'>AI Помощник</div>", unsafe_allow_html=True)
-if st.sidebar.button("💬 AI Чат", key="nav_chat", use_container_width=True,
+if st.sidebar.button("💬 AI Чат", key="nav_chat", width='stretch',
              type="primary" if st.session_state.current_page == "💬 AI Чат" else "secondary"):
     st.session_state.current_page = "💬 AI Чат"
     st.rerun()
 
 # Marketing Section
 st.sidebar.markdown("<div class='nav-section-title'>Маркетинг</div>", unsafe_allow_html=True)
-if st.sidebar.button("📢 Реклама", key="nav_ads", use_container_width=True,
+if st.sidebar.button("📢 Реклама", key="nav_ads", width='stretch',
              type="primary" if st.session_state.current_page == "📢 Реклама" else "secondary"):
     st.session_state.current_page = "📢 Реклама"
     st.rerun()
@@ -620,7 +620,7 @@ if st.sidebar.button("📢 Реклама", key="nav_ads", use_container_width=T
 st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
 
 # Home
-if st.sidebar.button("🏠 Главная", key="nav_home", use_container_width=True,
+if st.sidebar.button("🏠 Главная", key="nav_home", width='stretch',
              type="primary" if st.session_state.current_page == "🏠 Главная" else "secondary"):
     st.session_state.current_page = "🏠 Главная"
     st.rerun()
@@ -710,7 +710,7 @@ if page == "🏠 Главная":
                         paper_bgcolor='rgba(0,0,0,0)',
                         font_color='#f1f5f9'
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 else:
                     st.info("Нет данных о продажах")
             except:
@@ -730,19 +730,19 @@ if page == "🏠 Главная":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📦 Показать товары", use_container_width=True):
+            if st.button("📦 Показать товары", width='stretch'):
                 st.session_state.quick_action = "products"
         
         with col2:
-            if st.button("💰 Выручка", use_container_width=True):
+            if st.button("💰 Выручка", width='stretch'):
                 st.session_state.quick_action = "revenue"
         
         with col3:
-            if st.button("🔥 Топ товаров", use_container_width=True):
+            if st.button("🔥 Топ товаров", width='stretch'):
                 st.session_state.quick_action = "top"
         
         with col4:
-            if st.button("📢 Реклама", use_container_width=True):
+            if st.button("📢 Реклама", width='stretch'):
                 st.session_state.quick_action = "campaigns"
         
         # Second row
@@ -750,7 +750,7 @@ if page == "🏠 Главная":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📊 Отчет за неделю", use_container_width=True):
+            if st.button("📊 Отчет за неделю", width='stretch'):
                 st.session_state.quick_action = "weekly"
         
         # Execute quick action
@@ -779,7 +779,7 @@ if page == "🏠 Главная":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(df, width='stretch')
                         else:
                             st.info("Нет данных о товарах")
                             
@@ -804,7 +804,7 @@ if page == "🏠 Главная":
                         if top:
                             df = pd.DataFrame(top)
                             fig = px.bar(df, x='name', y='revenue', title='Топ товаров по выручке')
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width='stretch')
                         else:
                             st.info("Нет данных о продажах")
                             
@@ -813,7 +813,7 @@ if page == "🏠 Главная":
                         if campaigns:
                             st.success(f"Найдено {len(campaigns)} кампаний")
                             df = pd.DataFrame(campaigns)
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(df, width='stretch')
                         else:
                             st.info("Нет рекламных кампаний")
                     
@@ -831,12 +831,12 @@ if page == "🏠 Главная":
                             if report.get('daily_breakdown'):
                                 st.markdown("### 📈 По дням")
                                 df_daily = pd.DataFrame(report['daily_breakdown'])
-                                st.dataframe(df_daily, use_container_width=True)
+                                st.dataframe(df_daily, width='stretch')
                             
                             if report.get('top_products'):
                                 st.markdown("### 🏆 Топ товары")
                                 df_products = pd.DataFrame(report['top_products'][:10])
-                                st.dataframe(df_products, use_container_width=True)
+                                st.dataframe(df_products, width='stretch')
                             
                             csv_filename = st.session_state.agent.analytics.export_weekly_report_csv()
                             if csv_filename:
@@ -975,7 +975,7 @@ elif page == "📦 Товары":
                         })
                     
                     df = pd.DataFrame(df_data)
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, width='stretch')
                     
                     # Export
                     csv = df.to_csv(index=False).encode('utf-8')
@@ -1068,7 +1068,7 @@ elif page == "📋 Остатки":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(df, width='stretch')
                             
                             csv = df.to_csv(index=False).encode('utf-8')
                             st.download_button(
@@ -1139,7 +1139,7 @@ elif page == "📋 Остатки":
                             
                             st.markdown("#### 📊 По регионам")
                             df = pd.DataFrame(df_regions)
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(df, width='stretch')
                             
                             # Детализация по складам
                             st.markdown("#### 📋 Детализация по складам")
@@ -1157,7 +1157,7 @@ elif page == "📋 Остатки":
                             
                             if all_offices:
                                 df_offices = pd.DataFrame(all_offices)
-                                st.dataframe(df_offices, use_container_width=True)
+                                st.dataframe(df_offices, width='stretch')
                         else:
                             st.info("Нет данных о остатках FBO.")
                             
@@ -1181,7 +1181,7 @@ elif page == "📋 Остатки":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(df, width='stretch')
                             
                             # Скачать CSV
                             csv = df.to_csv(index=False).encode('utf-8')
@@ -1298,7 +1298,7 @@ elif page == "📊 Аналитика":
                     ]
                 }
                 df_details = pd.DataFrame(details_data)
-                st.dataframe(df_details, use_container_width=True, hide_index=True)
+                st.dataframe(df_details, width='stretch', hide_index=True)
         else:
             # Простой формат
             col1, col2, col3 = st.columns(3)
@@ -1321,7 +1321,7 @@ elif page == "📊 Аналитика":
             title='Топ 10 товаров по выручке',
             labels={'name': 'Товар', 'revenue': 'Выручка (₽)'}
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 elif page == "📢 Реклама":
     st.markdown("<div class='main-header'>📢 Управление рекламой</div>", unsafe_allow_html=True)
@@ -1348,7 +1348,7 @@ elif page == "📢 Реклама":
                     })
                 
                 df = pd.DataFrame(df_data)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df, width='stretch')
             else:
                 st.info("Нет рекламных кампаний")
     
