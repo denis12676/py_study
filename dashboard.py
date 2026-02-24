@@ -403,7 +403,7 @@ if not st.session_state.agent:
         )
         st.sidebar.info("💡 Токен можно получить в личном кабинете WB: Профиль → API Интеграции")
     
-    if st.sidebar.button("🚀 Подключиться", type="primary", width='stretch'):
+    if st.sidebar.button("🚀 Подключиться", type="primary", use_container_width=True):
         if api_token:
             try:
                 with st.spinner("Подключение к WB API..."):
@@ -584,35 +584,35 @@ st.sidebar.markdown("""
 
 # Analytics Section
 st.sidebar.markdown("<div class='nav-section-title'>Аналитика</div>", unsafe_allow_html=True)
-if st.sidebar.button("📊 Аналитика", key="nav_analytics", width='stretch',
+if st.sidebar.button("📊 Аналитика", key="nav_analytics", use_container_width=True)
              type="primary" if st.session_state.current_page == "📊 Аналитика" else "secondary"):
     st.session_state.current_page = "📊 Аналитика"
     st.rerun()
 
 # Products Section
 st.sidebar.markdown("<div class='nav-section-title'>Товары</div>", unsafe_allow_html=True)
-if st.sidebar.button("📦 Товары", key="nav_products", width='stretch',
+if st.sidebar.button("📦 Товары", key="nav_products", use_container_width=True)
              type="primary" if st.session_state.current_page == "📦 Товары" else "secondary"):
     st.session_state.current_page = "📦 Товары"
     st.rerun()
 
 # Inventory Section
 st.sidebar.markdown("<div class='nav-section-title'>Склад и остатки</div>", unsafe_allow_html=True)
-if st.sidebar.button("📋 Остатки", key="nav_inventory", width='stretch',
+if st.sidebar.button("📋 Остатки", key="nav_inventory", use_container_width=True)
              type="primary" if st.session_state.current_page == "📋 Остатки" else "secondary"):
     st.session_state.current_page = "📋 Остатки"
     st.rerun()
 
 # AI Chat Section
 st.sidebar.markdown("<div class='nav-section-title'>AI Помощник</div>", unsafe_allow_html=True)
-if st.sidebar.button("💬 AI Чат", key="nav_chat", width='stretch',
+if st.sidebar.button("💬 AI Чат", key="nav_chat", use_container_width=True)
              type="primary" if st.session_state.current_page == "💬 AI Чат" else "secondary"):
     st.session_state.current_page = "💬 AI Чат"
     st.rerun()
 
 # Marketing Section
 st.sidebar.markdown("<div class='nav-section-title'>Маркетинг</div>", unsafe_allow_html=True)
-if st.sidebar.button("📢 Реклама", key="nav_ads", width='stretch',
+if st.sidebar.button("📢 Реклама", key="nav_ads", use_container_width=True)
              type="primary" if st.session_state.current_page == "📢 Реклама" else "secondary"):
     st.session_state.current_page = "📢 Реклама"
     st.rerun()
@@ -620,7 +620,7 @@ if st.sidebar.button("📢 Реклама", key="nav_ads", width='stretch',
 st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
 
 # Home
-if st.sidebar.button("🏠 Главная", key="nav_home", width='stretch',
+if st.sidebar.button("🏠 Главная", key="nav_home", use_container_width=True)
              type="primary" if st.session_state.current_page == "🏠 Главная" else "secondary"):
     st.session_state.current_page = "🏠 Главная"
     st.rerun()
