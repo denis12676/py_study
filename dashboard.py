@@ -339,6 +339,23 @@ if st.sidebar.button("🏠 Главная", key="nav_home", use_container_width=
     st.session_state.current_page = "🏠 Главная"
     st.rerun()
 
+# Cache stats in sidebar
+from cache import SQLiteCache as _SQLiteCache
+st.sidebar.markdown("<div class='nav-section-title'>🗄️ Кэш БД</div>", unsafe_allow_html=True)
+_cache_inst = _SQLiteCache()
+_stats = _cache_inst.stats()
+st.sidebar.caption(
+    f"✅ {_stats['alive']} записей  |  ⏳ {_stats['expired']} устаревших"
+)
+if st.sidebar.button("🗑️ Очистить кэш БД", key="clear_db_cache", use_container_width=True, type="secondary"):
+    _cache_inst.clear()
+    st.sidebar.success("Кэш очищен")
+    st.rerun()
+if st.sidebar.button("♻️ Удалить устаревшие", key="purge_db_cache", use_container_width=True, type="secondary"):
+    removed = _cache_inst.purge_expired()
+    st.sidebar.success(f"Удалено {removed} записей")
+    st.rerun()
+
 page = st.session_state.current_page
 
 # Main content
