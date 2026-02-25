@@ -53,3 +53,8 @@ Thumbs.db
 *.log
 reports/
 nul
+
+# E2E test artifacts
+tests/e2e/screenshots/
+.pytest_cache/
+
