@@ -152,19 +152,45 @@ def get_dark_theme_css() -> str:
         border-radius: 12px;
         max-width: 100% !important;
         width: 100% !important;
+        max-height: 70vh !important;
         overflow: hidden !important;
-        box-sizing: border-box;
+        box-sizing: border-box !important;
     }
 
-    .stDataFrame > div,
-    [data-testid="stDataFrame"] > div {
-        overflow-x: auto !important;
+    /* Force dataframe container to not expand */
+    [data-testid="stDataFrame"] > div[data-testid="stDataFrameContainer"],
+    [data-testid="stDataFrame"] > div[class*="dataframe"] {
         max-width: 100% !important;
+        width: 100% !important;
+        max-height: 70vh !important;
+        overflow: auto !important;
     }
 
     /* The inner iframe Streamlit uses for dataframe */
     [data-testid="stDataFrame"] iframe {
         max-width: 100% !important;
+        width: 100% !important;
+        max-height: 70vh !important;
+    }
+
+    /* Ensure table cells don't expand */
+    [data-testid="stDataFrame"] td,
+    [data-testid="stDataFrame"] th {
+        max-width: 300px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
+    /* Container width enforcement */
+    .element-container[data-testid="stElementContainer"] {
+        max-width: 100% !important;
+    }
+
+    /* Column containers */
+    [data-testid="stColumn"] {
+        max-width: 100% !important;
+        overflow-x: auto !important;
     }
 
     .stDataFrame table {

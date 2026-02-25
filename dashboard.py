@@ -510,7 +510,7 @@ if page == "🏠 Главная":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(df, use_container_width=True, height=400)
                         else:
                             st.info("Нет данных о товарах")
                             
@@ -544,7 +544,7 @@ if page == "🏠 Главная":
                         if campaigns:
                             st.success(f"Найдено {len(campaigns)} кампаний")
                             df = pd.DataFrame(campaigns)
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(df, use_container_width=True, height=400)
                         else:
                             st.info("Нет рекламных кампаний")
                     
@@ -562,12 +562,12 @@ if page == "🏠 Главная":
                             if report.get('daily_breakdown'):
                                 st.markdown("### 📈 По дням")
                                 df_daily = pd.DataFrame(report['daily_breakdown'])
-                                st.dataframe(df_daily, use_container_width=True)
+                                st.dataframe(df_daily, use_container_width=True, height=300)
 
                             if report.get('top_products'):
                                 st.markdown("### 🏆 Топ товары")
                                 df_products = pd.DataFrame(report['top_products'][:10])
-                                st.dataframe(df_products, use_container_width=True)
+                                st.dataframe(df_products, use_container_width=True, height=400)
                             
                             csv_filename = st.session_state.agent.analytics.export_weekly_report_csv()
                             if csv_filename:
@@ -706,7 +706,7 @@ elif page == "📦 Товары":
                         })
                     
                     df = pd.DataFrame(df_data)
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, use_container_width=True, height=500)
 
                     # Export
                     csv = df.to_csv(index=False).encode('utf-8')
@@ -799,7 +799,7 @@ elif page == "📋 Остатки":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(df, use_container_width=True, height=400)
 
                             csv = df.to_csv(index=False).encode('utf-8')
                             st.download_button(
@@ -890,9 +890,35 @@ elif page == "📋 Остатки":
                         
                         if selected_warehouse != 'Все':
                             df_filtered = df[df['Склад'] == selected_warehouse]
-                            st.dataframe(df_filtered, use_container_width=True)
+                            st.dataframe(
+                                df_filtered, 
+                                use_container_width=True,
+                                height=500,
+                                column_config={
+                                    'Артикул WB': st.column_config.TextColumn(width='small'),
+                                    'Артикул продавца': st.column_config.TextColumn(width='small'),
+                                    'Баркод': st.column_config.TextColumn(width='small'),
+                                    'Склад': st.column_config.TextColumn(width='medium'),
+                                    'Категория': st.column_config.TextColumn(width='medium'),
+                                    'Предмет': st.column_config.TextColumn(width='medium'),
+                                    'Бренд': st.column_config.TextColumn(width='small'),
+                                }
+                            )
                         else:
-                            st.dataframe(df, use_container_width=True)
+                            st.dataframe(
+                                df, 
+                                use_container_width=True,
+                                height=500,
+                                column_config={
+                                    'Артикул WB': st.column_config.TextColumn(width='small'),
+                                    'Артикул продавца': st.column_config.TextColumn(width='small'),
+                                    'Баркод': st.column_config.TextColumn(width='small'),
+                                    'Склад': st.column_config.TextColumn(width='medium'),
+                                    'Категория': st.column_config.TextColumn(width='medium'),
+                                    'Предмет': st.column_config.TextColumn(width='medium'),
+                                    'Бренд': st.column_config.TextColumn(width='small'),
+                                }
+                            )
                         
                         # Статистика
                         total_quantity = df['Доступно'].sum()
@@ -1034,7 +1060,7 @@ elif page == "📊 Аналитика":
                     ]
                 }
                 df_details = pd.DataFrame(details_data)
-                st.dataframe(df_details, hide_index=True, use_container_width=True)
+                st.dataframe(df_details, hide_index=True, use_container_width=True, height=400)
         else:
             # Простой формат
             col1, col2, col3 = st.columns(3)
@@ -1084,7 +1110,7 @@ elif page == "📢 Реклама":
                     })
                 
                 df = pd.DataFrame(df_data)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df, use_container_width=True, height=400)
             else:
                 st.info("Нет рекламных кампаний")
     
