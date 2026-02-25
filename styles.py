@@ -15,26 +15,6 @@ def get_dark_theme_css() -> str:
     /* Global Dark Theme */
     .stApp {
         background-color: var(--bg-primary);
-        overflow-x: hidden !important;
-    }
-
-    /* Prevent page overflow at every level of the Streamlit DOM tree */
-    html, body {
-        overflow-x: hidden !important;
-        max-width: 100vw !important;
-    }
-
-    [data-testid="stAppViewContainer"],
-    [data-testid="stMain"],
-    section.main {
-        overflow-x: hidden !important;
-        max-width: 100% !important;
-    }
-
-    [data-testid="stVerticalBlock"],
-    [data-testid="stHorizontalBlock"] {
-        max-width: 100% !important;
-        min-width: 0 !important;
     }
 
     /* Sidebar Styling */
@@ -143,59 +123,41 @@ def get_dark_theme_css() -> str:
         background-color: rgba(255, 255, 255, 0.05);
     }
 
-    /* Tables */
-    /* Tables — constrain and scroll within box, never expand page */
+    /* Tables - AGGRESSIVE overflow prevention */
     .stDataFrame,
     [data-testid="stDataFrame"] {
         background-color: var(--bg-card);
         border: 1px solid var(--border-color);
         border-radius: 12px;
+        overflow: hidden !important;
         max-width: 100% !important;
         width: 100% !important;
-        max-height: 70vh !important;
-        overflow: hidden !important;
         box-sizing: border-box !important;
     }
 
-    /* Force dataframe container to not expand */
-    [data-testid="stDataFrame"] > div[data-testid="stDataFrameContainer"],
-    [data-testid="stDataFrame"] > div[class*="dataframe"] {
+    .stDataFrame > div,
+    [data-testid="stDataFrame"] > div {
+        overflow-x: auto !important;
         max-width: 100% !important;
         width: 100% !important;
-        max-height: 70vh !important;
-        overflow: auto !important;
     }
 
-    /* The inner iframe Streamlit uses for dataframe */
-    [data-testid="stDataFrame"] iframe {
-        max-width: 100% !important;
+    .stDataFrame table,
+    [data-testid="stDataFrame"] table {
         width: 100% !important;
-        max-height: 70vh !important;
+        table-layout: fixed !important;
+        max-width: 100% !important;
     }
-
-    /* Ensure table cells don't expand */
-    [data-testid="stDataFrame"] td,
-    [data-testid="stDataFrame"] th {
-        max-width: 300px !important;
+    
+    /* Force columns to not expand */
+    .stDataFrame th,
+    .stDataFrame td,
+    [data-testid="stDataFrame"] th,
+    [data-testid="stDataFrame"] td {
+        max-width: 200px !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
-    }
-
-    /* Container width enforcement */
-    .element-container[data-testid="stElementContainer"] {
-        max-width: 100% !important;
-    }
-
-    /* Column containers */
-    [data-testid="stColumn"] {
-        max-width: 100% !important;
-        overflow-x: auto !important;
-    }
-
-    .stDataFrame table {
-        table-layout: auto;
-        min-width: 0;
     }
 
     .stDataFrame thead th {
@@ -215,13 +177,9 @@ def get_dark_theme_css() -> str:
     }
 
     /* Main content container */
-    .main .block-container,
-    [data-testid="stMainBlockContainer"] {
-        max-width: 100% !important;
-        width: 100% !important;
+    .main .block-container {
+        max-width: 100%;
         padding: 2rem;
-        overflow-x: hidden !important;
-        box-sizing: border-box !important;
     }
 
     /* Tabs */

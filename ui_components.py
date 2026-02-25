@@ -14,11 +14,11 @@ def metric_card(label: str, value: str, subtitle: str = "") -> None:
     """, unsafe_allow_html=True)
 
 
-def dataframe_with_export(df: pd.DataFrame, filename: str, title: str = "", height: int = 400) -> None:
+def dataframe_with_export(df: pd.DataFrame, filename: str, title: str = "") -> None:
     """Render a dataframe with a CSV download button (used 15+ times)."""
     if title:
         st.subheader(title)
-    st.dataframe(df, use_container_width=True, height=height)
+    st.dataframe(df, use_container_width=True)
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("⬇ Скачать CSV", csv, filename, "text/csv")
 

@@ -510,7 +510,18 @@ if page == "🏠 Главная":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, use_container_width=True, height=400)
+                            st.dataframe(
+                                df,
+                                use_container_width=True,
+                                column_config={
+                                    'Артикул': st.column_config.NumberColumn(width='small'),
+                                    'Название': st.column_config.TextColumn(width='medium', max_chars=50),
+                                    'Артикул продавца': st.column_config.TextColumn(width='small', max_chars=20),
+                                    'Бренд': st.column_config.TextColumn(width='small', max_chars=15),
+                                    'Цена': st.column_config.NumberColumn(width='small', format='%.2f'),
+                                    'Предмет': st.column_config.TextColumn(width='medium', max_chars=25),
+                                }
+                            )
                         else:
                             st.info("Нет данных о товарах")
                             
@@ -544,7 +555,17 @@ if page == "🏠 Главная":
                         if campaigns:
                             st.success(f"Найдено {len(campaigns)} кампаний")
                             df = pd.DataFrame(campaigns)
-                            st.dataframe(df, use_container_width=True, height=400)
+                            st.dataframe(
+                                df,
+                                use_container_width=True,
+                                column_config={
+                                    'ID': st.column_config.NumberColumn(width='small'),
+                                    'Название': st.column_config.TextColumn(width='medium', max_chars=40),
+                                    'Тип': st.column_config.TextColumn(width='small', max_chars=15),
+                                    'Статус': st.column_config.TextColumn(width='small', max_chars=15),
+                                    'Ставка': st.column_config.NumberColumn(width='small', format='%d'),
+                                }
+                            )
                         else:
                             st.info("Нет рекламных кампаний")
                     
@@ -562,12 +583,30 @@ if page == "🏠 Главная":
                             if report.get('daily_breakdown'):
                                 st.markdown("### 📈 По дням")
                                 df_daily = pd.DataFrame(report['daily_breakdown'])
-                                st.dataframe(df_daily, use_container_width=True, height=300)
-
+                                st.dataframe(
+                                    df_daily,
+                                    use_container_width=True,
+                                    column_config={
+                                        'date': st.column_config.TextColumn(width='small', max_chars=10),
+                                        'revenue': st.column_config.NumberColumn(width='small', format='%.2f'),
+                                        'sales': st.column_config.NumberColumn(width='small'),
+                                        'returns': st.column_config.NumberColumn(width='small'),
+                                    }
+                                )
+                            
                             if report.get('top_products'):
                                 st.markdown("### 🏆 Топ товары")
                                 df_products = pd.DataFrame(report['top_products'][:10])
-                                st.dataframe(df_products, use_container_width=True, height=400)
+                                st.dataframe(
+                                    df_products,
+                                    use_container_width=True,
+                                    column_config={
+                                        'nm_id': st.column_config.NumberColumn(width='small'),
+                                        'name': st.column_config.TextColumn(width='medium', max_chars=40),
+                                        'revenue': st.column_config.NumberColumn(width='small', format='%.2f'),
+                                        'quantity': st.column_config.NumberColumn(width='small'),
+                                    }
+                                )
                             
                             csv_filename = st.session_state.agent.analytics.export_weekly_report_csv()
                             if csv_filename:
@@ -706,8 +745,19 @@ elif page == "📦 Товары":
                         })
                     
                     df = pd.DataFrame(df_data)
-                    st.dataframe(df, use_container_width=True, height=500)
-
+                    st.dataframe(
+                        df,
+                        use_container_width=True,
+                        column_config={
+                            'Артикул': st.column_config.NumberColumn(width='small'),
+                            'Название': st.column_config.TextColumn(width='medium', max_chars=50),
+                            'Артикул продавца': st.column_config.TextColumn(width='small', max_chars=20),
+                            'Бренд': st.column_config.TextColumn(width='small', max_chars=15),
+                            'Цена': st.column_config.NumberColumn(width='small', format='%.2f'),
+                            'Предмет': st.column_config.TextColumn(width='medium', max_chars=25),
+                        }
+                    )
+                    
                     # Export
                     csv = df.to_csv(index=False).encode('utf-8')
                     st.download_button(
@@ -799,8 +849,21 @@ elif page == "📋 Остатки":
                                 })
                             
                             df = pd.DataFrame(df_data)
-                            st.dataframe(df, use_container_width=True, height=400)
-
+                            st.dataframe(
+                                df,
+                                use_container_width=True,
+                                column_config={
+                                    'Баркод': st.column_config.TextColumn(width='small', max_chars=20),
+                                    'Артикул продавца': st.column_config.TextColumn(width='small', max_chars=20),
+                                    'Артикул WB': st.column_config.NumberColumn(width='small'),
+                                    'Название': st.column_config.TextColumn(width='medium', max_chars=50),
+                                    'Бренд': st.column_config.TextColumn(width='small', max_chars=15),
+                                    'Размер': st.column_config.TextColumn(width='small', max_chars=10),
+                                    'Остаток': st.column_config.NumberColumn(width='small'),
+                                    'В пути': st.column_config.NumberColumn(width='small'),
+                                }
+                            )
+                            
                             csv = df.to_csv(index=False).encode('utf-8')
                             st.download_button(
                                 "📥 Скачать CSV",
@@ -882,7 +945,14 @@ elif page == "📋 Остатки":
                                 'Скидка %': s.get('Discount', 0),
                             })
                         
-                        df = pd.DataFrame(df_data)
+                        df_full = pd.DataFrame(df_data)
+                        
+                        # Select only essential columns to prevent overflow
+                        essential_columns = [
+                            'Артикул WB', 'Артикул продавца', 'Склад', 
+                            'Доступно', 'Всего', 'Бренд', 'Цена'
+                        ]
+                        df = df_full[essential_columns].copy()
                         
                         # Фильтр по складу
                         all_warehouses = ['Все'] + sorted(df['Склад'].unique().tolist())
@@ -891,32 +961,34 @@ elif page == "📋 Остатки":
                         if selected_warehouse != 'Все':
                             df_filtered = df[df['Склад'] == selected_warehouse]
                             st.dataframe(
-                                df_filtered, 
+                                df_filtered,
                                 use_container_width=True,
-                                height=500,
+                                hide_index=True,
                                 column_config={
-                                    'Артикул WB': st.column_config.TextColumn(width='small'),
-                                    'Артикул продавца': st.column_config.TextColumn(width='small'),
-                                    'Баркод': st.column_config.TextColumn(width='small'),
-                                    'Склад': st.column_config.TextColumn(width='medium'),
-                                    'Категория': st.column_config.TextColumn(width='medium'),
-                                    'Предмет': st.column_config.TextColumn(width='medium'),
-                                    'Бренд': st.column_config.TextColumn(width='small'),
+                                    'Артикул WB': st.column_config.NumberColumn(width='small', format='%d'),
+                                    'Артикул продавца': st.column_config.TextColumn(width='small', max_chars=20),
+                                    'Склад': st.column_config.TextColumn(width='medium', max_chars=30),
+                                    'Доступно': st.column_config.NumberColumn(width='small'),
+                                    'Всего': st.column_config.NumberColumn(width='small'),
+                                    'Бренд': st.column_config.TextColumn(width='small', max_chars=15),
+                                    'Цена': st.column_config.NumberColumn(width='small', format='%.2f'),
                                 }
                             )
                         else:
                             st.dataframe(
-                                df, 
+                                df,
                                 use_container_width=True,
-                                height=500,
+                                hide_index=True,
                                 column_config={
-                                    'Артикул WB': st.column_config.TextColumn(width='small'),
-                                    'Артикул продавца': st.column_config.TextColumn(width='small'),
-                                    'Баркод': st.column_config.TextColumn(width='small'),
-                                    'Склад': st.column_config.TextColumn(width='medium'),
-                                    'Категория': st.column_config.TextColumn(width='medium'),
-                                    'Предмет': st.column_config.TextColumn(width='medium'),
-                                    'Бренд': st.column_config.TextColumn(width='small'),
+                                    'Артикул WB': st.column_config.NumberColumn(width='small', format='%d'),
+                                    'Артикул продавца': st.column_config.TextColumn(width='small', max_chars=20),
+                                    'Склад': st.column_config.TextColumn(width='medium', max_chars=30),
+                                    'Доступно': st.column_config.NumberColumn(width='small'),
+                                    'Всего': st.column_config.NumberColumn(width='small'),
+                                    'Бренд': st.column_config.TextColumn(width='small', max_chars=15),
+                                    'Размер': st.column_config.TextColumn(width='small', max_chars=10),
+                                    'Цена': st.column_config.NumberColumn(width='small', format='%.2f'),
+                                    'Скидка %': st.column_config.NumberColumn(width='small'),
                                 }
                             )
                         
@@ -1060,7 +1132,15 @@ elif page == "📊 Аналитика":
                     ]
                 }
                 df_details = pd.DataFrame(details_data)
-                st.dataframe(df_details, hide_index=True, use_container_width=True, height=400)
+                st.dataframe(
+                    df_details,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        'Показатель': st.column_config.TextColumn(width='medium', max_chars=40),
+                        'Значение': st.column_config.TextColumn(width='medium', max_chars=40),
+                    }
+                )
         else:
             # Простой формат
             col1, col2, col3 = st.columns(3)
@@ -1110,7 +1190,17 @@ elif page == "📢 Реклама":
                     })
                 
                 df = pd.DataFrame(df_data)
-                st.dataframe(df, use_container_width=True, height=400)
+                st.dataframe(
+                    df,
+                    use_container_width=True,
+                    column_config={
+                        'ID': st.column_config.NumberColumn(width='small'),
+                        'Название': st.column_config.TextColumn(width='medium', max_chars=40),
+                        'Тип': st.column_config.TextColumn(width='small', max_chars=15),
+                        'Статус': st.column_config.TextColumn(width='small', max_chars=15),
+                        'Ставка': st.column_config.NumberColumn(width='small', format='%d'),
+                    }
+                )
             else:
                 st.info("Нет рекламных кампаний")
     
