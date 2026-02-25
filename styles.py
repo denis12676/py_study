@@ -15,7 +15,26 @@ def get_dark_theme_css() -> str:
     /* Global Dark Theme */
     .stApp {
         background-color: var(--bg-primary);
-        overflow-x: hidden;
+        overflow-x: hidden !important;
+    }
+
+    /* Prevent page overflow at every level of the Streamlit DOM tree */
+    html, body {
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
+    }
+
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    section.main {
+        overflow-x: hidden !important;
+        max-width: 100% !important;
+    }
+
+    [data-testid="stVerticalBlock"],
+    [data-testid="stHorizontalBlock"] {
+        max-width: 100% !important;
+        min-width: 0 !important;
     }
 
     /* Sidebar Styling */
@@ -125,18 +144,27 @@ def get_dark_theme_css() -> str:
     }
 
     /* Tables */
-    .stDataFrame {
+    /* Tables — constrain and scroll within box, never expand page */
+    .stDataFrame,
+    [data-testid="stDataFrame"] {
         background-color: var(--bg-card);
         border: 1px solid var(--border-color);
         border-radius: 12px;
-        overflow: hidden;
-        max-width: 100%;
+        max-width: 100% !important;
         width: 100% !important;
+        overflow: hidden !important;
+        box-sizing: border-box;
     }
 
-    .stDataFrame > div {
+    .stDataFrame > div,
+    [data-testid="stDataFrame"] > div {
         overflow-x: auto !important;
-        max-width: 100%;
+        max-width: 100% !important;
+    }
+
+    /* The inner iframe Streamlit uses for dataframe */
+    [data-testid="stDataFrame"] iframe {
+        max-width: 100% !important;
     }
 
     .stDataFrame table {
@@ -161,10 +189,13 @@ def get_dark_theme_css() -> str:
     }
 
     /* Main content container */
-    .main .block-container {
-        max-width: 100%;
+    .main .block-container,
+    [data-testid="stMainBlockContainer"] {
+        max-width: 100% !important;
+        width: 100% !important;
         padding: 2rem;
-        overflow-x: hidden;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
     }
 
     /* Tabs */
