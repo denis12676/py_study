@@ -6,11 +6,15 @@
 """
 
 import json
+import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from wb_client import WildberriesAPI, WBConfig, API_ENDPOINTS
-from managers import ProductsManager, AnalyticsManager, OrdersManager, AdvertisingManager
+from managers import ProductsManager, InventoryManager, AnalyticsManager, OrdersManager, AdvertisingManager
 from api_registry import WBMethodRegistry
+from nlp_engine import RequestAnalyzer
+
+logger = logging.getLogger(__name__)
 
 
 class WildberriesAIAgent:
@@ -45,104 +49,40 @@ class WildberriesAIAgent:
         
         # Инициализируем менеджеры
         self.products = ProductsManager(self.api)
+        self.inventory = InventoryManager(self.api)
         self.analytics = AnalyticsManager(self.api)
         self.orders = OrdersManager(self.api)
         self.advertising = AdvertisingManager(self.api)
-        
+
+        # NLP-анализатор запросов
+        self._analyzer = RequestAnalyzer()
+
         # Последний результат
         self.last_result: Any = None
-        
+
         # Тестируем соединение
         self._test_connection()
-        
-        print("✅ Агент Wildberries инициализирован")
-        print(f"   Базовый URL: {config.base_url}")
+
+        logger.info("Агент Wildberries инициализирован. Базовый URL: %s", config.base_url)
     
     def _test_connection(self):
         """Тестирование соединения с API"""
         try:
-            # Пробуем получить информацию о продавце
             self.api.get("/api/v1/seller-info", base_url=API_ENDPOINTS["tariffs"])
         except Exception as e:
-            print(f"⚠️  Предупреждение: Не удалось проверить соединение: {e}")
-            print("   Это может быть временная проблема с серверами WB")
+            logger.warning("Не удалось проверить соединение: %s. Это может быть временная проблема с серверами WB", e)
     
     def _analyze_request(self, query: str) -> Dict[str, Any]:
         """
         Анализирует запрос и определяет какое действие выполнить.
-        
+
         Args:
             query: Запрос на естественном языке
-            
+
         Returns:
             Словарь с информацией о действии
         """
-        query_lower = query.lower()
-        
-        # Определяем тип запроса по ключевым словам
-        
-        # 1. ТОВАРЫ И КАТАЛОГ
-        if any(word in query_lower for word in ["товар", "продукт", "карточка", "артикул", "nm", "позиция"]):
-            if any(word in query_lower for word in ["цена", "стоимость", "дороже", "дешевле", "измени", "обнови", "повысь", "понизь"]):
-                return {"action": "update_price", "type": "products"}
-            elif any(word in query_lower for word in ["все", "список", "покажи", "выведи", "каталог"]):
-                return {"action": "list_products", "type": "products"}
-            elif any(word in query_lower for word in ["поиск", "найди", "где"]):
-                return {"action": "search_products", "type": "products"}
-            elif any(word in query_lower for word in ["остаток", "наличие", "склад", "карантин"]):
-                return {"action": "check_stocks", "type": "products"}
-            else:
-                return {"action": "list_products", "type": "products"}
-        
-        # 2. ПРОДАЖИ И АНАЛИТИКА
-        if any(word in query_lower for word in ["продажа", "выручка", "заказ", "аналитик", "статистик", "отчет", "деньг", "доход"]):
-            if any(word in query_lower for word in ["недел", "weekly", "прошл недел"]):
-                return {"action": "weekly_report", "type": "analytics"}
-            elif any(word in query_lower for word in ["топ", "лучш", "популярн", "рейтинг"]):
-                return {"action": "top_products", "type": "analytics"}
-            elif any(word in query_lower for word in ["выручка", "доход", "оборот", "деньг"]):
-                return {"action": "revenue_report", "type": "analytics"}
-            elif any(word in query_lower for word in ["детальн", "подробн", "комиссия", "себестоимость", "прибыль"]):
-                return {"action": "detailed_report", "type": "analytics"}
-            else:
-                return {"action": "sales_report", "type": "analytics"}
-        
-        # 3. РЕКЛАМА
-        if any(word in query_lower for word in ["реклам", "кампани", "продвижение", "ставка", "cpc", "cpm", "бюджет"]):
-            if any(word in query_lower for word in ["запусти", "стартуй", "включи", "начни"]):
-                return {"action": "start_campaign", "type": "advertising"}
-            elif any(word in query_lower for word in ["останови", "пауза", "выключи", "приостанови"]):
-                return {"action": "pause_campaign", "type": "advertising"}
-            elif any(word in query_lower for word in ["удали", "убери", "очисти"]):
-                return {"action": "delete_campaign", "type": "advertising"}
-            elif any(word in query_lower for word in ["создай", "новая", "добавь"]):
-                return {"action": "create_campaign", "type": "advertising"}
-            elif any(word in query_lower for word in ["ставка", "цена клика", "измени ставку"]):
-                return {"action": "update_bid", "type": "advertising"}
-            elif any(word in query_lower for word in ["статистик", "эффективность", "roi"]):
-                return {"action": "campaign_stats", "type": "advertising"}
-            else:
-                return {"action": "list_campaigns", "type": "advertising"}
-        
-        # 4. ЗАКАЗЫ
-        if any(word in query_lower for word in ["заказ", "сборка", "отгрузка", "fbs", "отмена"]):
-            if any(word in query_lower for word in ["новый", "новые", "текущий", "собрать", "подтверди"]):
-                return {"action": "new_orders", "type": "orders"}
-            elif any(word in query_lower for word in ["отмени", "отмена", "отменить"]):
-                return {"action": "cancel_order", "type": "orders"}
-            else:
-                return {"action": "list_orders", "type": "orders"}
-        
-        # 5. ОТЗЫВЫ И КОММУНИКАЦИИ
-        if any(word in query_lower for word in ["отзыв", "вопрос", "рейтинг", "оценка", "комментарий"]):
-            return {"action": "list_feedbacks", "type": "communication"}
-        
-        # 6. ИНФОРМАЦИЯ О МАГАЗИНЕ
-        if any(word in query_lower for word in ["магазин", "продавец", "информация", "профиль", "кто я"]):
-            return {"action": "seller_info", "type": "general"}
-        
-        # По умолчанию - справка
-        return {"action": "help", "type": "general"}
+        return self._analyzer.analyze(query)
     
     def _extract_params(self, query: str, action: str) -> Dict[str, Any]:
         """
@@ -224,19 +164,19 @@ class WildberriesAIAgent:
         Returns:
             Результат выполнения операции
         """
-        print(f"\n🤖 Запрос: {query}")
-        
+        logger.info("Запрос: %s", query)
+
         # Анализируем запрос
         action_info = self._analyze_request(query)
         action = action_info["action"]
         category = action_info["type"]
-        
+
         # Извлекаем параметры
         params = self._extract_params(query, action)
-        
-        print(f"📋 Действие: {action} | Категория: {category}")
+
+        logger.info("Действие: %s | Категория: %s", action, category)
         if params:
-            print(f"📊 Параметры: {params}")
+            logger.debug("Параметры: %s", params)
         
         try:
             # Выполняем действие
@@ -249,7 +189,7 @@ class WildberriesAIAgent:
             return result
             
         except Exception as e:
-            print(f"❌ Ошибка: {str(e)}")
+            logger.error("Ошибка: %s", e)
             return None
     
     def _execute_action(self, action: str, params: Dict[str, Any]) -> Any:
@@ -275,9 +215,9 @@ class WildberriesAIAgent:
             )
         
         elif action == "check_stocks":
-            warehouses = self.products.get_warehouses()
+            warehouses = self.inventory.get_warehouses()
             if warehouses:
-                return self.products.get_stocks(warehouse_id=warehouses[0]["id"])
+                return self.inventory.get_stocks(warehouse_id=warehouses[0]["id"])
             return []
         
         # ANALYTICS
@@ -384,109 +324,86 @@ class WildberriesAIAgent:
     
     def _print_result(self, action: str, result: Any, params: Dict[str, Any]):
         """Красиво выводит результат"""
-        
+
         if isinstance(result, list):
             if len(result) == 0:
-                print("📭 Нет данных для отображения")
+                logger.info("Нет данных для отображения")
                 return
-            
-            print(f"\n📋 Найдено {len(result)} записей:")
-            print("-" * 80)
-            
-            # Специальное форматирование для разных типов данных
+
+            logger.info("Найдено %d записей:", len(result))
+
             if action in ["list_products", "search_products"]:
-                for i, item in enumerate(result[:10], 1):  # Показываем первые 10
+                for i, item in enumerate(result[:10], 1):
                     nm_id = item.get("nmID", "N/A")
                     name = item.get("title", "Без названия")
                     price = item.get("sizes", [{}])[0].get("price", 0)
                     discount = item.get("discount", 0)
-                    print(f"{i}. Артикул: {nm_id} | {name}")
-                    print(f"   Цена: {price}₽ (скидка {discount}%)")
-                    print()
-                
+                    logger.info("%d. Артикул: %s | %s | Цена: %s₽ (скидка %s%%)", i, nm_id, name, price, discount)
+
                 if len(result) > 10:
-                    print(f"... и еще {len(result) - 10} товаров")
-            
+                    logger.info("... и еще %d товаров", len(result) - 10)
+
             elif action == "top_products":
                 for i, item in enumerate(result, 1):
-                    print(f"{i}. {item['name']} (арт. {item['nm_id']})")
-                    print(f"   Продано: {item['quantity']} шт. | Выручка: {item['revenue']:,.2f}₽")
-                    print()
-            
+                    logger.info("%d. %s (арт. %s) | Продано: %s шт. | Выручка: %.2f₽",
+                                i, item['name'], item['nm_id'], item['quantity'], item['revenue'])
+
             elif action == "sales_report":
                 total_revenue = sum(float(sale.get("totalPrice", 0)) for sale in result)
-                print(f"💰 Общая выручка: {total_revenue:,.2f}₽")
-                print(f"📦 Количество продаж: {len(result)}")
-                print(f"\nПоследние 5 продаж:")
+                logger.info("Общая выручка: %.2f₽ | Продаж: %d", total_revenue, len(result))
                 for sale in result[:5]:
-                    print(f"   - {sale.get('supplierArticle', 'N/A')} | {sale.get('totalPrice', 0)}₽ | {sale.get('date', 'N/A')}")
-            
+                    logger.info("  - %s | %s₽ | %s",
+                                sale.get('supplierArticle', 'N/A'), sale.get('totalPrice', 0), sale.get('date', 'N/A'))
+
             elif action == "list_campaigns":
                 for i, campaign in enumerate(result, 1):
                     status = campaign.get("status", 0)
-                    status_text = {4: "🟡 Готова", 7: "🟢 Активна", 11: "🔴 Пауза"}.get(status, "⚪ Другой")
-                    print(f"{i}. ID: {campaign.get('advertId')} | {campaign.get('name', 'Без названия')}")
-                    print(f"   Статус: {status_text} | Тип: {campaign.get('type', 'N/A')}")
-                    print()
-            
+                    status_text = {4: "Готова", 7: "Активна", 11: "Пауза"}.get(status, "Другой")
+                    logger.info("%d. ID: %s | %s | Статус: %s | Тип: %s",
+                                i, campaign.get('advertId'), campaign.get('name', 'Без названия'),
+                                status_text, campaign.get('type', 'N/A'))
+
             else:
-                # Для остальных типов выводим JSON
-                print(json.dumps(result[:5], indent=2, ensure_ascii=False))
+                logger.info("Результат: %s", json.dumps(result[:5], indent=2, ensure_ascii=False))
                 if len(result) > 5:
-                    print(f"\n... и еще {len(result) - 5} записей")
-        
+                    logger.info("... и еще %d записей", len(result) - 5)
+
         elif isinstance(result, dict):
             if "error" in result:
-                print(f"❌ Ошибка: {result['error']}")
+                logger.error("Ошибка: %s", result['error'])
             elif "success" in result:
-                status = "✅ Успешно" if result["success"] else "❌ Не удалось"
-                print(f"{status}: {result.get('action', 'операция')}")
+                status = "Успешно" if result["success"] else "Не удалось"
+                logger.info("%s: %s", status, result.get('action', 'операция'))
                 if "campaign_id" in result:
-                    print(f"   Кампания ID: {result['campaign_id']}")
+                    logger.info("Кампания ID: %s", result['campaign_id'])
             elif "date" in result and "total_revenue" in result:
-                # Выручка за конкретную дату
-                print("\n" + "="*60)
-                print(f"📅 ВЫРУЧКА ЗА {result['date']}")
-                print("="*60)
-                print(f"💰 Общая выручка:     {result['total_revenue']:,.2f} ₽")
-                print(f"📦 Продаж:            {result['total_sales']}")
-                print(f"📊 Средний чек:       {result['average_check']:,.2f} ₽")
-                print("="*60)
+                logger.info("ВЫРУЧКА ЗА %s: %.2f ₽ | Продаж: %d | Средний чек: %.2f ₽",
+                            result['date'], result['total_revenue'], result['total_sales'], result['average_check'])
             elif "week_start" in result:
-                # Еженедельный отчет
-                print("\n" + "="*70)
-                print(f"📅 ЕЖЕНЕДЕЛЬНЫЙ ОТЧЕТ: {result['week_start']} - {result['week_end']}")
-                print("="*70)
-                print(f"💰 Общая выручка:     {result['total_revenue']:,.2f} ₽")
-                print(f"📦 Продаж:            {result['total_sales']}")
-                print(f"🔄 Возвратов:         {result['total_returns']} ({result['return_rate']:.1f}%)")
-                print(f"📊 Средний чек:       {result['average_check']:,.2f} ₽")
-                print("="*70)
-                
+                logger.info("ЕЖЕНЕДЕЛЬНЫЙ ОТЧЕТ: %s - %s | Выручка: %.2f ₽ | Продаж: %d | Возвратов: %d (%.1f%%)",
+                            result['week_start'], result['week_end'],
+                            result['total_revenue'], result['total_sales'],
+                            result['total_returns'], result['return_rate'])
+
                 if result.get('daily_breakdown'):
-                    print("\n📈 ДНЕВНАЯ РАЗБИВКА:")
-                    print("-"*70)
-                    for day in result['daily_breakdown'][:7]:  # Показываем все 7 дней
-                        print(f"{day['date']}: {day['revenue']:>12.2f} ₽ | Продаж: {day['sales_count']:>3} | Возвратов: {day['returns_count']}")
-                
+                    for day in result['daily_breakdown'][:7]:
+                        logger.info("%s: %.2f ₽ | Продаж: %d | Возвратов: %d",
+                                    day['date'], day['revenue'], day['sales_count'], day['returns_count'])
+
                 if result.get('top_products'):
-                    print("\n🏆 ТОП ТОВАРЫ:")
-                    print("-"*70)
                     for i, product in enumerate(result['top_products'][:10], 1):
-                        print(f"{i}. {product['subject']} | {product['brand']} | Арт. {product['nmId']}")
-                        print(f"   Выручка: {product['revenue']:,.2f} ₽ | Продаж: {product['quantity']} | Возвратов: {product['returns']}")
-                
+                        logger.info("%d. %s | %s | Арт. %s | Выручка: %.2f ₽ | Продаж: %s",
+                                    i, product['subject'], product['brand'], product['nmId'],
+                                    product['revenue'], product['quantity'])
+
                 if result.get('category_breakdown'):
-                    print("\n📊 ПО КАТЕГОРИЯМ:")
-                    print("-"*70)
                     for cat in result['category_breakdown'][:5]:
-                        print(f"{cat['category']}: {cat['revenue']:,.2f} ₽ ({cat['sales']} продаж)")
+                        logger.info("%s: %.2f ₽ (%d продаж)", cat['category'], cat['revenue'], cat['sales'])
             else:
-                print("📊 Результат:")
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-        
+                logger.info("Результат: %s", json.dumps(result, indent=2, ensure_ascii=False))
+
         else:
-            print(f"📊 Результат: {result}")
+            logger.info("Результат: %s", result)
     
     def get_help(self) -> str:
         """Возвращает справку по использованию"""
@@ -525,26 +442,25 @@ class WildberriesAIAgent:
   agent.execute("Какая выручка за последние 30 дней?")
   agent.execute("Запусти рекламную кампанию 12345")
         """
-        print(help_text)
+        logger.info(help_text)
         return help_text
-    
+
     def suggest_method(self, description: str) -> List[Dict[str, Any]]:
         """
         Предлагает методы API подходящие под описание задачи
-        
+
         Args:
             description: Описание задачи
-            
+
         Returns:
             Список подходящих методов
         """
         methods = WBMethodRegistry.find_method(description)
-        
-        print(f"\n🔍 Для задачи \"{description}\" найдены методы:")
+
+        logger.info("Для задачи \"%s\" найдены методы:", description)
         for i, method in enumerate(methods, 1):
-            print(f"\n{i}. {method['name']}")
-            print(f"   {method['description']}")
-            print(f"   Endpoint: {method['method']} {method['endpoint']}")
-            print(f"   Категория: {method['category']}")
-        
+            logger.info("%d. %s — %s | Endpoint: %s %s | Категория: %s",
+                        i, method['name'], method['description'],
+                        method['method'], method['endpoint'], method['category'])
+
         return methods
