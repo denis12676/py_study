@@ -1107,32 +1107,92 @@ elif page == "📋 Остатки":
         st.markdown("### 🏭 Остатки на складах WB (FBO)")
         st.markdown("*Полная информация по остаткам на всех складах Wildberries*")
         
-        if st.button("🔄 Загрузить остатки FBO", type="primary", key="fbo_load"):
-            with st.spinner("Загрузка остатков FBO..."):
+        # Показываем время последнего обновления если есть
+        if 'fbo_stocks_timestamp' in st.session_state:
+            last_update = st.session_state.fbo_stocks_timestamp
+            st.caption(f"🕐 Последнее обновление: {last_update}")
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            force_refresh = st.checkbox("🔄 Принудительное обновление (игнорировать кеш)", value=False)
+        with col2:
+            if st.button("🗑️ Очистить кеш", type="secondary"):
+                st.session_state.agent.products.clear_fbo_cache()
+                st.success("Кеш очищен!")
+        
+        if st.button("📦 Загрузить остатки FBO", type="primary", key="fbo_load"):
+            with st.spinner("Загрузка остатков FBO через Statistics API..."):
                 try:
-                    print("UI: Старт загрузки остатков FBO через get_fbo_stocks_with_article()")
-                    # Используем новый метод, который работает через Analytics API + Content API
-                    stocks = st.session_state.agent.products.get_fbo_stocks_with_article()
-                    print(f"UI: get_fbo_stocks_with_article() вернул {len(stocks) if isinstance(stocks, list) else 'не-список'} записей")
+                    print("UI: Старт загрузки остатков FBO через get_fbo_stocks()")
+                    
+                    # Используем новый метод с Statistics API
+                    stocks = st.session_state.agent.products.get_fbo_stocks(
+                        use_cache=not force_refresh,
+                        force_refresh=force_refresh
+                    )
+                    
+                    print(f"UI: get_fbo_stocks() вернул {len(stocks) if isinstance(stocks, list) else 'не-список'} записей")
                     st.session_state.fbo_stocks = stocks
+                    st.session_state.fbo_stocks_timestamp = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
                     
                     if stocks:
                         st.success(f"✅ Загружено {len(stocks)} записей")
                         
-                        # Создаем DataFrame с данными
+                        # Группируем по складам для отображения
+                        by_warehouse = {}
+                        for s in stocks:
+                            wh = s.get('warehouseName', 'Неизвестно')
+                            by_warehouse[wh] = by_warehouse.get(wh, 0) + 1
+                        
+                        # Показываем статистику по складам
+                        st.markdown("**📊 Распределение по складам:**")
+                        cols = st.columns(min(len(by_warehouse), 4))
+                        for i, (warehouse, count) in enumerate(by_warehouse.items()):
+                            with cols[i % 4]:
+                                st.metric(warehouse, f"{count} товаров")
+                        
+                        # Создаем DataFrame с полными данными
                         df_data = []
                         for s in stocks:
                             df_data.append({
-                                'Артикул продавца': s.get('supplierArticle', ''),
                                 'Артикул WB': s.get('nmId', ''),
-                                'Остаток': s.get('stockCount', 0)
+                                'Артикул продавца': s.get('supplierArticle', ''),
+                                'Баркод': s.get('barcode', ''),
+                                'Склад': s.get('warehouseName', ''),
+                                'Доступно': s.get('quantity', 0),
+                                'В пути до клиента': s.get('inWayToClient', 0),
+                                'В пути от клиента': s.get('inWayFromClient', 0),
+                                'Всего': s.get('quantityFull', 0),
+                                'Категория': s.get('category', ''),
+                                'Предмет': s.get('subject', ''),
+                                'Бренд': s.get('brand', ''),
+                                'Размер': s.get('techSize', ''),
+                                'Цена': s.get('Price', 0),
+                                'Скидка %': s.get('Discount', 0),
                             })
                         
                         df = pd.DataFrame(df_data)
-                        st.dataframe(df)
                         
-                        # Скачать CSV (только артикул и количество)
-                        df_simple = df[['Артикул продавца', 'Остаток']].copy()
+                        # Фильтр по складу
+                        all_warehouses = ['Все'] + sorted(df['Склад'].unique().tolist())
+                        selected_warehouse = st.selectbox("📍 Фильтр по складу:", all_warehouses)
+                        
+                        if selected_warehouse != 'Все':
+                            df_filtered = df[df['Склад'] == selected_warehouse]
+                            st.dataframe(df_filtered, use_container_width=True)
+                        else:
+                            st.dataframe(df, use_container_width=True)
+                        
+                        # Статистика
+                        total_quantity = df['Доступно'].sum()
+                        total_full = df['Всего'].sum()
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("📦 Всего товаров", len(df))
+                        col2.metric("📊 Доступно для продажи", int(total_quantity))
+                        col3.metric("🔄 Полный остаток", int(total_full))
+                        
+                        # Скачать CSV (только основные поля)
+                        df_simple = df[['Артикул продавца', 'Артикул WB', 'Доступно', 'Склад']].copy()
                         csv = df_simple.to_csv(index=False).encode('utf-8')
                         st.download_button(
                             "📥 Скачать CSV (артикул + количество)",
@@ -1152,14 +1212,17 @@ elif page == "📋 Остатки":
                             key="fbo_full_download"
                         )
                     else:
-                        print("UI: get_fbo_stocks_with_article() вернул пустой список, показываем сообщение в UI")
-                        st.info("Нет данных о остатках FBO.")
+                        print("UI: get_fbo_stocks() вернул пустой список")
+                        st.info("ℹ️ Нет данных о остатках FBO. Возможные причины:\n\n"
+                               "1. Нет активных товаров на складах WB\n"
+                               "2. Временные проблемы с API\n"
+                               "3. Rate limit - попробуйте через минуту")
                         
                 except Exception as e:
                     print(f"UI ERROR: исключение при загрузке остатков FBO: {e}")
                     import traceback
                     traceback.print_exc()
-                    st.error(f"Ошибка загрузки: {e}")
+                    st.error(f"❌ Ошибка загрузки: {e}")
                     st.code(traceback.format_exc())
 
 elif page == "📊 Аналитика":

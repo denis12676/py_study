@@ -17,6 +17,7 @@ class WBConfig:
     content_url: str = "https://content-api.wildberries.ru"
     marketplace_url: str = "https://marketplace-api.wildberries.ru"
     advert_url: str = "https://advert-api.wb.ru"
+    statistics_url: str = "https://statistics-api.wildberries.ru"
     timeout: int = 30
     max_retries: int = 3
 
@@ -25,13 +26,15 @@ class RateLimiter:
     """Rate limiter для контроля частоты запросов к API"""
     
     # Rate limits для разных категорий API (запросов/мин)
+    # Примечание: Statistics API имеет лимит 1 запрос/мин, но мы не делаем 
+    # preemptive задержку, а полагаемся на retry при 429 ошибке
     RATE_LIMITS = {
-        "statistics": 300,    # 300 req/min = 1 req/0.2s
-        "content": 100,     # 100 req/min = 1 req/0.6s
-        "marketplace": 1000, # 1000 req/min = 1 req/0.06s
-        "advert": 300,      # 300 req/min
-        "analytics": 100,   # 100 req/min
-        "prices": 100,      # 100 req/min
+        "statistics": 60,     # 60 req/min = 1 req/sec - разумный лимит без искусственных задержек
+        "content": 100,       # 100 req/min = 1 req/0.6s
+        "marketplace": 1000,  # 1000 req/min = 1 req/0.06s
+        "advert": 300,        # 300 req/min
+        "analytics": 100,     # 100 req/min
+        "prices": 100,        # 100 req/min
         "default": 100
     }
     
