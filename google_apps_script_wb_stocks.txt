@@ -1,0 +1,364 @@
+/**
+ * СКРИПТ ДЛЯ ВЫГРУЗКИ ОСТАТКОВ WILDBERRIES В GOOGLE SHEETS
+ * 
+ * Инструкция по установке:
+ * 1. Открой Google Sheets
+ * 2. Создай новый лист с названием "API"
+ * 3. В ячейку A1 вставь свой токен WB API
+ * 4. Расширения → Apps Script
+ * 5. Удали весь код и вставь этот скрипт
+ * 6. Сохрани (Ctrl+S) и запусти функцию getFboStocks()
+ * 
+ * Токен можно получить: ЛК WB → Настройки → API Интеграции
+ */
+
+// ================= НАСТРОЙКИ =================
+const API_SHEET_NAME = 'API';
+const API_TOKEN_CELL = 'A1';
+const ANALYTICS_API_URL = 'https://seller-analytics-api.wildberries.ru';
+const CONTENT_API_URL = 'https://content-api.wildberries.ru';
+
+// ================= ПОЛУЧЕНИЕ ТОКЕНА =================
+function getApiToken() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let apiSheet = ss.getSheetByName(API_SHEET_NAME);
+  
+  // Если лист не существует, создаем его
+  if (!apiSheet) {
+    apiSheet = ss.insertSheet(API_SHEET_NAME);
+    apiSheet.getRange('A1').setValue('ВСТАВЬТЕ_ВАШ_ТОКЕН_СЮДА');
+    apiSheet.getRange('A2').setValue('Инструкция: ЛК WB → Настройки → API Интеграции');
+    throw new Error(`Лист "${API_SHEET_NAME}" не найден. Создан автоматически. Вставьте токен в ячейку A1.`);
+  }
+  
+  const token = apiSheet.getRange(API_TOKEN_CELL).getValue();
+  
+  if (!token || token === 'ВСТАВЬТЕ_ВАШ_ТОКЕН_СЮДА' || token === 'YOUR_WB_API_TOKEN') {
+    throw new Error(`Токен не найден в листе "${API_SHEET_NAME}" ячейка ${API_TOKEN_CELL}. Вставьте ваш WB API токен.`);
+  }
+  
+  return token;
+}
+
+// ================= ОСНОВНАЯ ФУНКЦИЯ =================
+function getFboStocks() {
+  try {
+    // Получаем токен из листа API
+    const WB_API_TOKEN = getApiToken();
+    Logger.log('Токен API успешно получен из листа API');
+    
+    // 1. Получаем маппинг nmId -> supplierArticle из Content API
+    Logger.log('Загрузка артикулов продавца...');
+    const nmToArticle = getNmToArticleMapping(WB_API_TOKEN);
+    Logger.log(`Загружено ${Object.keys(nmToArticle).length} товаров`);
+    
+    // 2. Получаем остатки FBO из Analytics API
+    Logger.log('Загрузка остатков FBO...');
+    const stocks = getStocksFromAnalytics(WB_API_TOKEN, nmToArticle);
+    Logger.log(`Получено ${stocks.length} записей с остатками`);
+    
+    // 3. Записываем в Google Sheets
+    if (stocks.length > 0) {
+      writeToSheet(stocks);
+      Logger.log('Данные успешно записаны в таблицу!');
+      
+      // Показываем уведомление
+      SpreadsheetApp.getActiveSpreadsheet().toast(
+        `Загружено ${stocks.length} товаров`, 
+        'Готово!', 
+        5
+      );
+    } else {
+      Logger.log('Нет данных о остатках');
+      SpreadsheetApp.getActiveSpreadsheet().toast(
+        'Нет данных о остатках на складах FBO', 
+        'Внимание', 
+        5
+      );
+    }
+    
+  } catch (error) {
+    Logger.log(`ОШИБКА: ${error}`);
+    SpreadsheetApp.getActiveSpreadsheet().toast(
+      `Ошибка: ${error.message}`, 
+      'Ошибка!', 
+      10
+    );
+  }
+}
+
+// ================= ФУНКЦИИ =================
+
+/**
+ * Получить маппинг nmId -> supplierArticle
+ */
+function getNmToArticleMapping(token) {
+  const mapping = {};
+  let cursor = { limit: 100 };
+  let hasMore = true;
+  let iterations = 0;
+  const MAX_ITERATIONS = 10; // Защита от бесконечного цикла
+  
+  while (hasMore && iterations < MAX_ITERATIONS) {
+    iterations++;
+    
+    const payload = {
+      settings: {
+        cursor: cursor,
+        filter: { withPhoto: -1 }
+      }
+    };
+    
+    const response = UrlFetchApp.fetch(
+      `${CONTENT_API_URL}/content/v2/get/cards/list`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': token,
+          'Content-Type': 'application/json'
+        },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      }
+    );
+    
+    if (response.getResponseCode() !== 200) {
+      Logger.log(`Ошибка Content API: ${response.getContentText()}`);
+      break;
+    }
+    
+    const data = JSON.parse(response.getContentText());
+    const cards = data.cards || [];
+    
+    if (cards.length === 0) {
+      hasMore = false;
+      break;
+    }
+    
+    // Добавляем в маппинг
+    cards.forEach(card => {
+      const nmId = card.nmID;
+      if (nmId) {
+        mapping[nmId] = card.vendorCode || '';
+      }
+    });
+    
+    // Проверяем, есть ли еще товары
+    const responseCursor = data.cursor || {};
+    const total = responseCursor.total || 0;
+    
+    if (cards.length < 100 || Object.keys(mapping).length >= total) {
+      hasMore = false;
+    } else {
+      // Обновляем курсор для следующей страницы
+      const lastCard = cards[cards.length - 1];
+      cursor = {
+        limit: 100,
+        updatedAt: lastCard.updatedAt,
+        nmID: lastCard.nmID
+      };
+    }
+  }
+  
+  return mapping;
+}
+
+/**
+ * Получить остатки из Analytics API
+ */
+function getStocksFromAnalytics(token, nmToArticle) {
+  const today = Utilities.formatDate(new Date(), 'Europe/Moscow', 'yyyy-MM-dd');
+  
+  const payload = {
+    nmIDs: [],
+    subjectIDs: [],
+    brandNames: [],
+    tagIDs: [],
+    currentPeriod: {
+      start: today,
+      end: today
+    },
+    stockType: 'wb', // FBO склады
+    skipDeletedNm: true,
+    availabilityFilters: [],
+    orderBy: {
+      field: 'avgOrders',
+      mode: 'asc'
+    },
+    limit: 1000,
+    offset: 0
+  };
+  
+  const response = UrlFetchApp.fetch(
+    `${ANALYTICS_API_URL}/api/v2/stocks-report/products/groups`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    }
+  );
+  
+  if (response.getResponseCode() !== 200) {
+    throw new Error(`Analytics API ошибка: ${response.getContentText()}`);
+  }
+  
+  const data = JSON.parse(response.getContentText());
+  const groups = data.data?.groups || [];
+  
+  const result = [];
+  groups.forEach(group => {
+    const nmId = group.nmID;
+    const stocks = group.stocks || [];
+    const totalStock = stocks.reduce((sum, s) => sum + (s.stock || 0), 0);
+    
+    if (totalStock > 0) { // Только товары с остатками
+      result.push({
+        nmId: nmId,
+        supplierArticle: nmToArticle[nmId] || '',
+        stockCount: totalStock,
+        category: group.category || '',
+        subject: group.subject || '',
+        brand: group.brand || ''
+      });
+    }
+  });
+  
+  return result;
+}
+
+/**
+ * Записать данные в Google Sheets
+ */
+function writeToSheet(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  
+  // Очищаем лист (начиная с A1)
+  sheet.clear();
+  
+  // Заголовки
+  const headers = [
+    'Артикул продавца',
+    'Артикул WB', 
+    'Остаток',
+    'Категория',
+    'Предмет',
+    'Бренд'
+  ];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  
+  // Форматируем заголовки
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#4285f4')
+    .setFontColor('white');
+  
+  // Данные
+  const rows = data.map(item => [
+    item.supplierArticle,
+    item.nmId,
+    item.stockCount,
+    item.category,
+    item.subject,
+    item.brand
+  ]);
+  
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  }
+  
+  // Автоширина колонок
+  sheet.autoResizeColumns(1, headers.length);
+  
+  // Фильтр и сортировка
+  if (rows.length > 0) {
+    const range = sheet.getRange(1, 1, rows.length + 1, headers.length);
+    range.createFilter();
+  }
+}
+
+/**
+ * Альтернативный метод: Прямая выгрузка из /api/v1/supplier/stocks
+ * Если Analytics API не работает, попробуй этот метод
+ */
+function getFboStocksAlternative() {
+  try {
+    // Получаем токен из листа API
+    const token = getApiToken();
+    Logger.log('Альтернативный метод: токен получен из листа API');
+    
+    const dateFrom = '2019-06-20T00:00:00';
+    
+    const response = UrlFetchApp.fetch(
+      `https://statistics-api.wildberries.ru/api/v1/supplier/stocks?dateFrom=${dateFrom}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': token
+        },
+        muteHttpExceptions: true
+      }
+    );
+    
+    if (response.getResponseCode() !== 200) {
+      throw new Error(`API ошибка: ${response.getContentText()}`);
+    }
+    
+    const data = JSON.parse(response.getContentText());
+    
+    if (!Array.isArray(data) || data.length === 0) {
+      Logger.log('API вернул пустой массив');
+      return;
+    }
+    
+    // Записываем в таблицу
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    sheet.clear();
+    
+    // Заголовки
+    const headers = [
+      'Артикул продавца',
+      'Артикул WB',
+      'Баркод',
+      'Количество',
+      'Склад',
+      'Дата изменения'
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setFontWeight('bold')
+      .setBackground('#4285f4')
+      .setFontColor('white');
+    
+    // Данные
+    const rows = data.map(item => [
+      item.supplierArticle,
+      item.nmId,
+      item.barcode,
+      item.quantity,
+      item.warehouseName,
+      item.lastChangeDate
+    ]);
+    
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+    sheet.autoResizeColumns(1, headers.length);
+    
+    Logger.log(`Загружено ${rows.length} записей`);
+    SpreadsheetApp.getActiveSpreadsheet().toast(
+      `Загружено ${rows.length} записей`, 
+      'Готово!', 
+      5
+    );
+    
+  } catch (error) {
+    Logger.log(`ОШИБКА: ${error}`);
+    SpreadsheetApp.getActiveSpreadsheet().toast(
+      `Ошибка: ${error.message}`, 
+      'Ошибка!', 
+      10
+    );
+  }
+}
