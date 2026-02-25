@@ -15,6 +15,7 @@ def get_dark_theme_css() -> str:
     /* Global Dark Theme */
     .stApp {
         background-color: var(--bg-primary);
+        overflow-x: hidden;
     }
 
     /* Sidebar Styling */
@@ -130,15 +131,17 @@ def get_dark_theme_css() -> str:
         border-radius: 12px;
         overflow: hidden;
         max-width: 100%;
+        width: 100% !important;
     }
 
     .stDataFrame > div {
         overflow-x: auto !important;
+        max-width: 100%;
     }
 
     .stDataFrame table {
-        width: 100%;
         table-layout: auto;
+        min-width: 0;
     }
 
     .stDataFrame thead th {
@@ -161,6 +164,7 @@ def get_dark_theme_css() -> str:
     .main .block-container {
         max-width: 100%;
         padding: 2rem;
+        overflow-x: hidden;
     }
 
     /* Tabs */
