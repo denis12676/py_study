@@ -138,7 +138,7 @@ class ProductsManager:
         return self.api.post(
             "/api/v2/upload/task",
             data=data,
-            base_url=self.api.config.content_url
+            base_url=API_ENDPOINTS["prices"]
         )
 
     def update_multiple_prices(self, price_data: List[Dict]) -> Dict:
@@ -155,7 +155,7 @@ class ProductsManager:
         return self.api.post(
             "/api/v2/upload/task",
             data={"data": price_data},
-            base_url=self.api.config.content_url
+            base_url=API_ENDPOINTS["prices"]
         )
 
     def get_quarantine_products(self) -> List[Dict]:
@@ -247,6 +247,118 @@ class ProductsManager:
 
         except Exception as e:
             logger.error("Ошибка получения chrtIds: %s", e, exc_info=True)
+            return []
+
+    def get_products_with_photos_and_prices(self, limit: int = 100, search: str = None) -> List[Dict]:
+        """
+        Получить товары с фото, ценами и скидками.
+        Объединяет данные из Content API (фото, название) и Prices API (цены, скидки).
+        
+        Args:
+            limit: Лимит товаров (макс 100)
+            search: Поисковый запрос
+            
+        Returns:
+            Список товаров с полной информацией:
+            - nmID: Артикул WB
+            - vendorCode: Артикул продавца
+            - title: Название товара
+            - brand: Бренд
+            - photo_url: URL фото товара
+            - price: Цена без скидки
+            - discountedPrice: Цена со скидкой
+            - discount: Скидка в %
+            - sizes: Размеры товара с ценами
+        """
+        try:
+            # Шаг 1: Получаем товары с ценами из Prices API
+            params = {"limit": limit, "offset": 0}
+            if search:
+                params["search"] = search
+
+            prices_response = self.api.get(
+                "/api/v2/list/goods/filter",
+                params=params,
+                base_url=API_ENDPOINTS["prices"]
+            )
+            
+            goods = prices_response.get("data", {}).get("listGoods", [])
+            if not goods:
+                return []
+            
+            # Создаем словарь товаров по nmID для быстрого доступа
+            goods_by_nm = {g['nmID']: g for g in goods}
+            nm_ids = list(goods_by_nm.keys())
+            
+            # Шаг 2: Получаем детальную информацию о товарах из Content API (включая фото)
+            content_data = []
+            batch_size = 100
+            
+            for i in range(0, len(nm_ids), batch_size):
+                batch = nm_ids[i:i + batch_size]
+                response = self.api.post(
+                    "/content/v2/get/cards/list",
+                    data={
+                        "settings": {
+                            "cursor": {"limit": batch_size},
+                            "filter": {
+                                "nmID": batch,
+                                "withPhoto": 1
+                            }
+                        }
+                    },
+                    base_url=API_ENDPOINTS["content"]
+                )
+                
+                cards = response.get("cards", [])
+                content_data.extend(cards)
+            
+            # Шаг 3: Объединяем данные из обоих API
+            result = []
+            for card in content_data:
+                nm_id = card.get('nmID')
+                if nm_id not in goods_by_nm:
+                    continue
+                    
+                price_info = goods_by_nm[nm_id]
+                
+                # Получаем URL фото (берем первое фото, размер square 600x600)
+                photos = card.get('photos', [])
+                photo_url = None
+                if photos:
+                    photo_url = photos[0].get('square') or photos[0].get('c246x328') or photos[0].get('big')
+                
+                # Получаем информацию о ценах
+                sizes = price_info.get('sizes', [])
+                price = 0
+                discounted_price = 0
+                
+                if sizes:
+                    # Берем первый размер
+                    first_size = sizes[0]
+                    price = first_size.get('price', 0)
+                    discounted_price = first_size.get('discountedPrice', price)
+                
+                result.append({
+                    'nmID': nm_id,
+                    'vendorCode': card.get('vendorCode', ''),
+                    'title': card.get('title', ''),
+                    'brand': card.get('brand', ''),
+                    'subjectName': card.get('subjectName', ''),
+                    'photo_url': photo_url,
+                    'price': price,
+                    'discountedPrice': discounted_price,
+                    'discount': price_info.get('discount', 0),
+                    'clubDiscount': price_info.get('clubDiscount', 0),
+                    'currency': price_info.get('currencyIsoCode4217', 'RUB'),
+                    'sizes': sizes,
+                    'editableSizePrice': price_info.get('editableSizePrice', False)
+                })
+            
+            return result
+            
+        except Exception as e:
+            logger.error("Ошибка получения товаров с ценами и фото: %s", e, exc_info=True)
             return []
 
     def get_chrt_id_mapping(self) -> Dict[int, Dict]:

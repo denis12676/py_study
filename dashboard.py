@@ -310,6 +310,13 @@ if st.sidebar.button("📦 Товары", key="nav_products", use_container_widt
     st.session_state.current_page = "📦 Товары"
     st.rerun()
 
+# Prices Section
+st.sidebar.markdown("<div class='nav-section-title'>Цены</div>", unsafe_allow_html=True)
+if st.sidebar.button("💰 Управление ценами", key="nav_prices", use_container_width=True,
+             type="primary" if st.session_state.current_page == "💰 Управление ценами" else "secondary"):
+    st.session_state.current_page = "💰 Управление ценами"
+    st.rerun()
+
 # Inventory Section
 st.sidebar.markdown("<div class='nav-section-title'>Склад и остатки</div>", unsafe_allow_html=True)
 if st.sidebar.button("📋 Остатки", key="nav_inventory", use_container_width=True,
@@ -1243,6 +1250,271 @@ elif page == "📢 Реклама":
                             st.success("Кампания удалена!")
                         else:
                             st.error("Не удалось удалить")
+
+elif page == "💰 Управление ценами":
+    st.markdown("<div class='main-header'>💰 Управление ценами</div>", unsafe_allow_html=True)
+    
+    # Инициализация session state
+    if 'price_edit_data' not in st.session_state:
+        st.session_state.price_edit_data = {}
+    if 'price_products_loaded' not in st.session_state:
+        st.session_state.price_products_loaded = False
+    if 'selected_products' not in st.session_state:
+        st.session_state.selected_products = set()
+    if 'price_current_page' not in st.session_state:
+        st.session_state.price_current_page = 1
+    
+    # Фильтры и кнопки действий
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
+    
+    with col1:
+        search_query = st.text_input("🔍 Поиск по артикулу или названию:", placeholder="Введите запрос...")
+    
+    with col2:
+        items_per_page = st.selectbox("На странице:", [20, 50, 100], index=0)
+    
+    with col3:
+        if st.button("🔄 Загрузить", type="primary", use_container_width=True):
+            st.session_state.price_products_loaded = False
+            st.session_state.price_edit_data = {}
+            st.session_state.selected_products = set()
+            st.session_state.price_current_page = 1
+    
+    with col4:
+        # Кнопка отправки изменений (активна только при выборе товаров)
+        selected_count = len(st.session_state.selected_products)
+        if selected_count > 0:
+            if st.button(f"✅ Отправить ({selected_count})", type="primary", use_container_width=True):
+                # Отправляем только выбранные товары
+                changes = []
+                for nm_id in st.session_state.selected_products:
+                    edit_data = st.session_state.price_edit_data.get(nm_id, {})
+                    price = edit_data.get('price', 0)
+                    discounted = edit_data.get('discountedPrice', price)
+                    discount = edit_data.get('discount', 0)
+                    
+                    if price > 0:
+                        changes.append({
+                            'nmID': nm_id,
+                            'price': int(price),
+                            'discount': discount
+                        })
+                
+                if changes:
+                    with st.spinner(f"Отправка {len(changes)} товаров..."):
+                        try:
+                            result = st.session_state.agent.products.update_multiple_prices(changes)
+                            st.success(f"✅ Цены обновлены! ID загрузки: {result.get('data', {}).get('uploadID', 'N/A')}")
+                            st.session_state.selected_products = set()
+                            st.session_state.price_products_loaded = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Ошибка: {e}")
+    
+    # Загрузка товаров
+    if not st.session_state.price_products_loaded:
+        with st.spinner("Загрузка товаров..."):
+            try:
+                # Загружаем все товары сразу (до 1000)
+                products = st.session_state.agent.products.get_products_with_photos_and_prices(
+                    limit=1000,
+                    search=search_query if search_query else None
+                )
+                st.session_state.price_products_all = products
+                st.session_state.price_products_loaded = True
+                
+                # Инициализируем данные для редактирования
+                for p in products:
+                    nm_id = p['nmID']
+                    if nm_id not in st.session_state.price_edit_data:
+                        st.session_state.price_edit_data[nm_id] = {
+                            'price': p['price'],
+                            'discountedPrice': p['discountedPrice'],
+                            'discount': p['discount']
+                        }
+                
+                if products:
+                    st.success(f"✅ Загружено {len(products)} товаров")
+                else:
+                    st.info("ℹ️ Товары не найдены")
+                    
+            except Exception as e:
+                st.error(f"❌ Ошибка загрузки: {e}")
+    
+    # Отображение таблицы
+    if st.session_state.price_products_loaded and st.session_state.get('price_products_all'):
+        all_products = st.session_state.price_products_all
+        total_products = len(all_products)
+        
+        # Пагинация
+        total_pages = max(1, (total_products + items_per_page - 1) // items_per_page)
+        current_page = st.session_state.price_current_page
+        
+        # Получаем товары для текущей страницы
+        start_idx = (current_page - 1) * items_per_page
+        end_idx = min(start_idx + items_per_page, total_products)
+        products = all_products[start_idx:end_idx]
+        
+        # Заголовок таблицы с счетчиками
+        col_counter, col_pagination = st.columns([2, 3])
+        
+        with col_counter:
+            selected_count = len(st.session_state.selected_products)
+            st.markdown(f"**Всего: {total_products} | Выбрано: {selected_count}**")
+        
+        with col_pagination:
+            # Кнопки пагинации
+            cols = st.columns([1, 1, 3, 1, 1])
+            with cols[0]:
+                if st.button("◀", disabled=current_page <= 1):
+                    st.session_state.price_current_page -= 1
+                    st.rerun()
+            with cols[1]:
+                st.markdown(f"**{current_page} / {total_pages}**", unsafe_allow_html=True)
+            with cols[3]:
+                if st.button("▶", disabled=current_page >= total_pages):
+                    st.session_state.price_current_page += 1
+                    st.rerun()
+        
+        # Шапка таблицы
+        st.markdown("""
+        <style>
+            .price-table-header {
+                background-color: #1e293b;
+                padding: 10px;
+                border-radius: 6px;
+                font-weight: 600;
+                color: #94a3b8;
+                margin-bottom: 5px;
+            }
+            .price-table-row {
+                background-color: rgba(30, 41, 59, 0.3);
+                padding: 8px;
+                border-radius: 6px;
+                margin-bottom: 5px;
+                border: 1px solid #334155;
+                transition: all 0.2s;
+            }
+            .price-table-row:hover {
+                background-color: rgba(30, 41, 59, 0.5);
+                border-color: #8b5cf6;
+            }
+            .price-table-row.selected {
+                background-color: rgba(139, 92, 246, 0.1);
+                border-color: #8b5cf6;
+            }
+            .product-img {
+                width: 50px;
+                height: 50px;
+                object-fit: cover;
+                border-radius: 4px;
+            }
+        </style>
+        <div class="price-table-header">
+            <div style="display: grid; grid-template-columns: 40px 70px 2fr 120px 100px 120px; gap: 10px; align-items: center;">
+                <div><input type="checkbox" disabled></div>
+                <div>Фото</div>
+                <div>Товар</div>
+                <div>Цена без скидки</div>
+                <div>Скидка</div>
+                <div>Цена со скидкой</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Строки таблицы
+        for p in products:
+            nm_id = p['nmID']
+            is_selected = nm_id in st.session_state.selected_products
+            edit_data = st.session_state.price_edit_data.get(nm_id, {})
+            
+            # Цвет фона для выбранных
+            row_class = "price-table-row selected" if is_selected else "price-table-row"
+            
+            # Создаем строку товара
+            col_checkbox, col_photo, col_info, col_price, col_discount, col_discounted = st.columns([0.5, 0.8, 2.5, 1.2, 1, 1.5])
+            
+            with col_checkbox:
+                checkbox_key = f"chk_{nm_id}"
+                is_checked = st.checkbox(" ", value=is_selected, key=checkbox_key, label_visibility="collapsed")
+                if is_checked != is_selected:
+                    if is_checked:
+                        st.session_state.selected_products.add(nm_id)
+                    else:
+                        st.session_state.selected_products.discard(nm_id)
+                    st.rerun()
+            
+            with col_photo:
+                if p['photo_url']:
+                    st.image(p['photo_url'], width=50)
+                else:
+                    st.markdown("📷")
+            
+            with col_info:
+                title = p['title'][:40] + "..." if len(p['title']) > 40 else p['title']
+                st.markdown(f"**{title}**")
+                st.caption(f"Арт. {p['vendorCode']} | WB: {nm_id}")
+            
+            with col_price:
+                price_key = f"price_{nm_id}"
+                current_price = edit_data.get('price', p['price']) or 1
+                if current_price < 1:
+                    current_price = 1
+                new_price = st.number_input(
+                    " ",
+                    min_value=1,
+                    value=int(current_price),
+                    key=price_key,
+                    label_visibility="collapsed"
+                )
+            
+            with col_discount:
+                # Рассчитываем скидку автоматически
+                if new_price > 0:
+                    current_discounted = edit_data.get('discountedPrice', p['discountedPrice'])
+                    discount_pct = int((1 - current_discounted / new_price) * 100) if current_discounted < new_price else 0
+                else:
+                    discount_pct = 0
+                st.markdown(f"<div style='text-align: center; padding-top: 10px;'>{discount_pct}%</div>", unsafe_allow_html=True)
+            
+            with col_discounted:
+                discounted_key = f"discounted_{nm_id}"
+                current_discounted = edit_data.get('discountedPrice', p['discountedPrice']) or 1
+                if current_discounted < 1:
+                    current_discounted = 1
+                new_discounted = st.number_input(
+                    " ",
+                    min_value=1,
+                    value=int(current_discounted),
+                    key=discounted_key,
+                    label_visibility="collapsed"
+                )
+            
+            # Сохраняем изменения
+            st.session_state.price_edit_data[nm_id] = {
+                'price': new_price,
+                'discountedPrice': new_discounted,
+                'discount': int((1 - new_discounted / new_price) * 100) if new_price > 0 and new_discounted < new_price else 0
+            }
+        
+        # Кнопки действий снизу
+        st.markdown("---")
+        col_bottom1, col_bottom2, col_bottom3 = st.columns([1, 2, 1])
+        
+        with col_bottom1:
+            if st.button("✓ Выбрать все", use_container_width=True):
+                for p in all_products:
+                    st.session_state.selected_products.add(p['nmID'])
+                st.rerun()
+        
+        with col_bottom2:
+            # Пустая колонка - кнопка отправки перенесена вверх
+            pass
+        
+        with col_bottom3:
+            if st.button("✗ Очистить выбор", use_container_width=True):
+                st.session_state.selected_products = set()
+                st.rerun()
 
 # Footer
 st.sidebar.markdown("---")
