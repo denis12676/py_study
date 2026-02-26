@@ -34,6 +34,33 @@ class AnalyticsManager:
         """Очистить кэш"""
         self._cache.clear()
 
+    @staticmethod
+    def _to_int_nm_id(value: Any) -> Optional[int]:
+        """Normalize nmID/nmId that can come as int/float/string."""
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            if value.is_integer():
+                return int(value)
+            return None
+
+        text = str(value).strip()
+        if not text:
+            return None
+
+        # Accept formats like "12345" and "12345.0", reject non-integer ids.
+        try:
+            numeric = float(text)
+        except ValueError:
+            return None
+        if numeric.is_integer():
+            return int(numeric)
+        return None
+
     def get_sales(
         self,
         date_from: Optional[str] = None,
@@ -74,7 +101,9 @@ class AnalyticsManager:
         )
         result = response if isinstance(response, list) else []
 
-        self._cache.set(cache_key, result)
+        # Do not cache empty result too aggressively; it is often caused by temporary API lag.
+        if result:
+            self._cache.set(cache_key, result)
         return result
 
     def get_orders(
@@ -460,3 +489,155 @@ class AnalyticsManager:
             base_url=API_ENDPOINTS["statistics"]
         )
         return response if isinstance(response, list) else []
+
+    def get_avg_orders_by_nm_ids(
+        self,
+        nm_ids: List[int],
+        days: int = 30,
+        stock_type: str = ""
+    ) -> Dict[int, float]:
+        """
+        Get average daily order speed for nmIDs.
+
+        Primary source: Analytics API `/api/v2/stocks-report/products/products`
+        (`docs/swagger/11-analytics.yaml`, field `metrics.avgOrders`).
+        Fallback: Statistics API `/api/v1/supplier/orders` over the same period.
+        """
+        valid_ids = sorted({int(nm) for nm in nm_ids if int(nm) > 0})
+        if not valid_ids:
+            return {}
+
+        cache_key = self._cache.make_key(
+            "get_avg_orders_by_nm_ids_v2",
+            nm_ids=valid_ids,
+            days=days,
+            stock_type=stock_type,
+        )
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=max(days - 1, 0))
+        period_days = max(days, 1)
+
+        result: Dict[int, float] = {}
+        batch_size = 1000
+
+        # 1) Try Analytics API avgOrders first.
+        # For stockType, WB docs allow "", "wb", "mp"; in practice some accounts return
+        # values only for specific stock types, so we try all and keep max per nmID.
+        stock_types = [stock_type] if stock_type in ("", "wb", "mp") else [""]
+        if stock_type == "":
+            stock_types = ["", "wb", "mp"]
+
+        for current_stock_type in stock_types:
+            for i in range(0, len(valid_ids), batch_size):
+                batch_ids = valid_ids[i:i + batch_size]
+                payload = {
+                    "nmIDs": batch_ids,
+                    "currentPeriod": {
+                        "start": start_date.strftime("%Y-%m-%d"),
+                        "end": end_date.strftime("%Y-%m-%d"),
+                    },
+                    "stockType": current_stock_type,
+                    "skipDeletedNm": True,
+                    "availabilityFilters": [],
+                    "orderBy": {
+                        "field": "avgOrders",
+                        "mode": "desc",
+                    },
+                    "limit": 1000,
+                    "offset": 0,
+                }
+
+                try:
+                    response = self.api.post(
+                        "/api/v2/stocks-report/products/products",
+                        data=payload,
+                        base_url=API_ENDPOINTS["analytics"],
+                    )
+                except Exception:
+                    response = {}
+
+                items = []
+                if isinstance(response, dict):
+                    data = response.get("data", {})
+                    if isinstance(data, dict):
+                        items = data.get("items", []) or []
+                    elif isinstance(data, list):
+                        items = data
+                elif isinstance(response, list):
+                    items = response
+
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    nm_id = item.get("nmID")
+                    if nm_id is None:
+                        nm_id = item.get("nmId")
+                    nm_id = self._to_int_nm_id(nm_id)
+                    if nm_id is None:
+                        continue
+
+                    avg_orders = 0.0
+                    metrics = item.get("metrics", {})
+                    if isinstance(metrics, dict):
+                        avg_orders = float(metrics.get("avgOrders", 0) or 0)
+                    elif "avgOrders" in item:
+                        avg_orders = float(item.get("avgOrders", 0) or 0)
+
+                    prev = float(result.get(nm_id, 0) or 0)
+                    result[nm_id] = max(prev, avg_orders)
+
+        # 2) Fallback via orders history for missing/zero nmIDs
+        missing_ids = [nm for nm in valid_ids if result.get(nm, 0) <= 0]
+        if missing_ids:
+            qty_by_nm: Dict[int, float] = {nm: 0.0 for nm in missing_ids}
+            missing_set = set(missing_ids)
+
+            try:
+                orders = self.get_orders(
+                    date_from=start_date.strftime("%Y-%m-%d"),
+                    date_to=end_date.strftime("%Y-%m-%d"),
+                    limit=100000,
+                )
+                for order in orders:
+                    if not isinstance(order, dict):
+                        continue
+                    nm_id = self._to_int_nm_id(order.get("nmId"))
+                    if nm_id is None or nm_id not in missing_set:
+                        continue
+                    qty = order.get("quantity", 1)
+                    qty_by_nm[nm_id] += float(qty or 1)
+            except Exception:
+                pass
+
+            # 3) Extra fallback: sales statistics (if orders endpoint returns sparse data)
+            if not any(v > 0 for v in qty_by_nm.values()):
+                try:
+                    sales = self.get_sales(
+                        date_from=start_date.strftime("%Y-%m-%d"),
+                        date_to=end_date.strftime("%Y-%m-%d"),
+                        limit=100000,
+                    )
+                    for sale in sales:
+                        if not isinstance(sale, dict):
+                            continue
+                        nm_id = self._to_int_nm_id(sale.get("nmId"))
+                        if nm_id is None or nm_id not in missing_set:
+                            continue
+                        if sale.get("isCancel", False) or sale.get("isReturn", False):
+                            continue
+                        qty = sale.get("quantity", 1)
+                        qty_by_nm[nm_id] += float(qty or 1)
+                except Exception:
+                    pass
+
+            for nm_id in missing_ids:
+                if qty_by_nm.get(nm_id, 0) > 0:
+                    result[nm_id] = round(qty_by_nm[nm_id] / period_days, 4)
+
+        self._cache.set(cache_key, result)
+        return result
+
