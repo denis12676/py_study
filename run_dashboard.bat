@@ -5,17 +5,28 @@ echo  Wildberries AI Dashboard
 echo ==========================================
 echo.
 
-REM Check if streamlit is installed
-python -c "import streamlit" 2>nul
+if not exist .venv\Scripts\python.exe (
+    echo Creating virtual environment...
+    py -m venv .venv
+    if errorlevel 1 (
+        echo Failed to create virtual environment.
+        pause
+        exit /b 1
+    )
+)
+
+echo Installing dependencies...
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 if errorlevel 1 (
-    echo Installing dependencies...
-    pip install -r requirements.txt
+    echo Failed to install dependencies.
+    pause
+    exit /b 1
 )
 
 echo Starting dashboard...
 echo.
-echo After starting, open browser at: http://localhost:8501
+echo After starting, open browser at: http://127.0.0.1:8501
 echo.
-streamlit run dashboard.py
+.\.venv\Scripts\python.exe -m streamlit run dashboard.py --server.address 127.0.0.1 --server.port 8501
 
 pause

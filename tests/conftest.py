@@ -37,6 +37,8 @@ def mock_api(wb_config):
     """Mocked WildberriesAPI instance with mockable methods"""
     api = Mock(spec=WildberriesAPI)
     api.config = wb_config
+    api.session = Mock()
+    api.session.request = Mock()
     
     # Mock all HTTP methods
     api.get = Mock()

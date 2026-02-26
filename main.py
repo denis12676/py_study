@@ -15,6 +15,9 @@ import os
 import sys
 from ai_agent import WildberriesAIAgent
 from dotenv import load_dotenv
+from logging_config import setup_logging
+
+setup_logging()
 
 # Загружаем переменные из .env файла
 load_dotenv()
@@ -117,6 +120,13 @@ def main():
             if query.lower() in ["help", "помощь", "справка", "?"]:
                 agent.get_help()
                 continue
+            if query.lower() in ["health", "здоровье", "диагностика"]:
+                health = agent.api.get_health_status()
+                print("\nAPI health:", "OK" if health.get("overall_ok") else "ISSUES")
+                print("Checks:", health.get("checks"))
+                print("Diagnostics:", health.get("diagnostics"))
+                continue
+
             
             # Выполняем запрос
             agent.execute(query)
@@ -203,3 +213,4 @@ wildberries-ai-agent/
 
 if __name__ == "__main__":
     main()
+

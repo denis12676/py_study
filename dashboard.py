@@ -16,7 +16,9 @@ from wb_client import WBConfig
 from managers import ProductsManager, AnalyticsManager, AdvertisingManager
 from styles import get_dark_theme_css
 from ui_components import metric_card, dataframe_with_export, fetch_with_spinner
+from logging_config import setup_logging
 
+setup_logging()
 logger = logging.getLogger(__name__)
 
 # Page configuration with dark theme
@@ -117,7 +119,7 @@ if not st.session_state.agent:
         )
         st.sidebar.info("💡 Токен можно получить в личном кабинете WB: Профиль → API Интеграции")
     
-    if st.sidebar.button("🚀 Подключиться", type="primary", width='stretch'):
+    if st.sidebar.button("🚀 Подключиться", type="primary", use_container_width=True):
         if api_token:
             try:
                 with st.spinner("Подключение к WB API..."):
@@ -189,6 +191,20 @@ else:
         st.rerun()
     
     st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+
+    if st.sidebar.button("API Diagnostics", use_container_width=True):
+        with st.spinner("Checking API availability..."):
+            health = st.session_state.agent.api.get_health_status()
+        st.session_state['last_health_check'] = health
+
+    if 'last_health_check' in st.session_state:
+        health = st.session_state['last_health_check']
+        st.sidebar.markdown("### API Health")
+        st.sidebar.write("OK" if health.get("overall_ok") else "Issues detected")
+        st.sidebar.caption(
+            f"requests: {health.get('diagnostics', {}).get('total_requests', 0)} | "
+            f"errors: {health.get('diagnostics', {}).get('total_errors', 0)}"
+        )
 
 # Initialize page in session state
 if 'current_page' not in st.session_state:
@@ -298,42 +314,42 @@ st.sidebar.markdown("""
 
 # Analytics Section
 st.sidebar.markdown("<div class='nav-section-title'>Аналитика</div>", unsafe_allow_html=True)
-if st.sidebar.button("📊 Аналитика", key="nav_analytics", width='stretch',
+if st.sidebar.button("📊 Аналитика", key="nav_analytics", use_container_width=True,
              type="primary" if st.session_state.current_page == "📊 Аналитика" else "secondary"):
     st.session_state.current_page = "📊 Аналитика"
     st.rerun()
 
 # Products Section
 st.sidebar.markdown("<div class='nav-section-title'>Товары</div>", unsafe_allow_html=True)
-if st.sidebar.button("📦 Товары", key="nav_products", width='stretch',
+if st.sidebar.button("📦 Товары", key="nav_products", use_container_width=True,
              type="primary" if st.session_state.current_page == "📦 Товары" else "secondary"):
     st.session_state.current_page = "📦 Товары"
     st.rerun()
 
 # Prices Section
 st.sidebar.markdown("<div class='nav-section-title'>Цены</div>", unsafe_allow_html=True)
-if st.sidebar.button("💰 Управление ценами", key="nav_prices", width='stretch',
+if st.sidebar.button("💰 Управление ценами", key="nav_prices", use_container_width=True,
              type="primary" if st.session_state.current_page == "💰 Управление ценами" else "secondary"):
     st.session_state.current_page = "💰 Управление ценами"
     st.rerun()
 
 # Inventory Section
 st.sidebar.markdown("<div class='nav-section-title'>Склад и остатки</div>", unsafe_allow_html=True)
-if st.sidebar.button("📋 Остатки", key="nav_inventory", width='stretch',
+if st.sidebar.button("📋 Остатки", key="nav_inventory", use_container_width=True,
              type="primary" if st.session_state.current_page == "📋 Остатки" else "secondary"):
     st.session_state.current_page = "📋 Остатки"
     st.rerun()
 
 # AI Chat Section
 st.sidebar.markdown("<div class='nav-section-title'>AI Помощник</div>", unsafe_allow_html=True)
-if st.sidebar.button("💬 AI Чат", key="nav_chat", width='stretch',
+if st.sidebar.button("💬 AI Чат", key="nav_chat", use_container_width=True,
              type="primary" if st.session_state.current_page == "💬 AI Чат" else "secondary"):
     st.session_state.current_page = "💬 AI Чат"
     st.rerun()
 
 # Marketing Section
 st.sidebar.markdown("<div class='nav-section-title'>Маркетинг</div>", unsafe_allow_html=True)
-if st.sidebar.button("📢 Реклама", key="nav_ads", width='stretch',
+if st.sidebar.button("📢 Реклама", key="nav_ads", use_container_width=True,
              type="primary" if st.session_state.current_page == "📢 Реклама" else "secondary"):
     st.session_state.current_page = "📢 Реклама"
     st.rerun()
@@ -341,7 +357,7 @@ if st.sidebar.button("📢 Реклама", key="nav_ads", width='stretch',
 st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
 
 # Home
-if st.sidebar.button("🏠 Главная", key="nav_home", width='stretch',
+if st.sidebar.button("🏠 Главная", key="nav_home", use_container_width=True,
              type="primary" if st.session_state.current_page == "🏠 Главная" else "secondary"):
     st.session_state.current_page = "🏠 Главная"
     st.rerun()
@@ -354,11 +370,11 @@ _stats = _cache_inst.stats()
 st.sidebar.caption(
     f"✅ {_stats['alive']} записей  |  ⏳ {_stats['expired']} устаревших"
 )
-if st.sidebar.button("🗑️ Очистить кэш БД", key="clear_db_cache", width='stretch', type="secondary"):
+if st.sidebar.button("🗑️ Очистить кэш БД", key="clear_db_cache", use_container_width=True, type="secondary"):
     _cache_inst.clear()
     st.sidebar.success("Кэш очищен")
     st.rerun()
-if st.sidebar.button("♻️ Удалить устаревшие", key="purge_db_cache", width='stretch', type="secondary"):
+if st.sidebar.button("♻️ Удалить устаревшие", key="purge_db_cache", use_container_width=True, type="secondary"):
     removed = _cache_inst.purge_expired()
     st.sidebar.success(f"Удалено {removed} записей")
     st.rerun()
@@ -448,7 +464,7 @@ if page == "🏠 Главная":
                         paper_bgcolor='rgba(0,0,0,0)',
                         font_color='#f1f5f9'
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.info("Нет данных о продажах")
             except:
@@ -468,19 +484,19 @@ if page == "🏠 Главная":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📦 Показать товары", width='stretch'):
+            if st.button("📦 Показать товары", use_container_width=True):
                 st.session_state.quick_action = "products"
         
         with col2:
-            if st.button("💰 Выручка", width='stretch'):
+            if st.button("💰 Выручка", use_container_width=True):
                 st.session_state.quick_action = "revenue"
         
         with col3:
-            if st.button("🔥 Топ товаров", width='stretch'):
+            if st.button("🔥 Топ товаров", use_container_width=True):
                 st.session_state.quick_action = "top"
         
         with col4:
-            if st.button("📢 Реклама", width='stretch'):
+            if st.button("📢 Реклама", use_container_width=True):
                 st.session_state.quick_action = "campaigns"
         
         # Second row
@@ -488,7 +504,7 @@ if page == "🏠 Главная":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📊 Отчет за неделю", width='stretch'):
+            if st.button("📊 Отчет за неделю", use_container_width=True):
                 st.session_state.quick_action = "weekly"
         
         # Execute quick action
@@ -519,7 +535,7 @@ if page == "🏠 Главная":
                             df = pd.DataFrame(df_data)
                             st.dataframe(
                                 df,
-                                width='stretch',
+                                use_container_width=True,
                                 column_config={
                                     'Артикул': st.column_config.NumberColumn(width='small'),
                                     'Название': st.column_config.TextColumn(width='medium', max_chars=50),
@@ -553,7 +569,7 @@ if page == "🏠 Главная":
                         if top:
                             df = pd.DataFrame(top)
                             fig = px.bar(df, x='name', y='revenue', title='Топ товаров по выручке')
-                            st.plotly_chart(fig, width='stretch')
+                            st.plotly_chart(fig, use_container_width=True)
                         else:
                             st.info("Нет данных о продажах")
                             
@@ -564,7 +580,7 @@ if page == "🏠 Главная":
                             df = pd.DataFrame(campaigns)
                             st.dataframe(
                                 df,
-                                width='stretch',
+                                use_container_width=True,
                                 column_config={
                                     'ID': st.column_config.NumberColumn(width='small'),
                                     'Название': st.column_config.TextColumn(width='medium', max_chars=40),
@@ -592,7 +608,7 @@ if page == "🏠 Главная":
                                 df_daily = pd.DataFrame(report['daily_breakdown'])
                                 st.dataframe(
                                     df_daily,
-                                    width='stretch',
+                                    use_container_width=True,
                                     column_config={
                                         'date': st.column_config.TextColumn(width='small', max_chars=10),
                                         'revenue': st.column_config.NumberColumn(width='small', format='%.2f'),
@@ -606,7 +622,7 @@ if page == "🏠 Главная":
                                 df_products = pd.DataFrame(report['top_products'][:10])
                                 st.dataframe(
                                     df_products,
-                                    width='stretch',
+                                    use_container_width=True,
                                     column_config={
                                         'nm_id': st.column_config.NumberColumn(width='small'),
                                         'name': st.column_config.TextColumn(width='medium', max_chars=40),
@@ -754,7 +770,7 @@ elif page == "📦 Товары":
                     df = pd.DataFrame(df_data)
                     st.dataframe(
                         df,
-                        width='stretch',
+                        use_container_width=True,
                         column_config={
                             'Артикул': st.column_config.NumberColumn(width='small'),
                             'Название': st.column_config.TextColumn(width='medium', max_chars=50),
@@ -858,7 +874,7 @@ elif page == "📋 Остатки":
                             df = pd.DataFrame(df_data)
                             st.dataframe(
                                 df,
-                                width='stretch',
+                                use_container_width=True,
                                 column_config={
                                     'Баркод': st.column_config.TextColumn(width='small', max_chars=20),
                                     'Артикул продавца': st.column_config.TextColumn(width='small', max_chars=20),
@@ -969,7 +985,7 @@ elif page == "📋 Остатки":
                             df_filtered = df[df['Склад'] == selected_warehouse]
                             st.dataframe(
                                 df_filtered,
-                                width='stretch',
+                                use_container_width=True,
                                 hide_index=True,
                                 column_config={
                                     'Артикул WB': st.column_config.NumberColumn(width='small', format='%d'),
@@ -984,7 +1000,7 @@ elif page == "📋 Остатки":
                         else:
                             st.dataframe(
                                 df,
-                                width='stretch',
+                                use_container_width=True,
                                 hide_index=True,
                                 column_config={
                                     'Артикул WB': st.column_config.NumberColumn(width='small', format='%d'),
@@ -1101,7 +1117,7 @@ elif page == "📋 Остатки":
                         )
 
                         df_summary = df_summary.sort_values(by=["Общий остаток", "Артикул"], ascending=[False, True])
-                        st.dataframe(df_summary, width='stretch', hide_index=True)
+                        st.dataframe(df_summary, use_container_width=True, hide_index=True)
 
                         col1, col2, col3 = st.columns(3)
                         col1.metric("Артикулов", len(df_summary))
@@ -1222,7 +1238,7 @@ elif page == "📊 Аналитика":
                 st.dataframe(
                     df_details,
                     hide_index=True,
-                    width='stretch',
+                    use_container_width=True,
                     column_config={
                         'Показатель': st.column_config.TextColumn(width='medium', max_chars=40),
                         'Значение': st.column_config.TextColumn(width='medium', max_chars=40),
@@ -1250,7 +1266,7 @@ elif page == "📊 Аналитика":
             title='Топ 10 товаров по выручке',
             labels={'name': 'Товар', 'revenue': 'Выручка (₽)'}
         )
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
 
 elif page == "📢 Реклама":
     st.markdown("<div class='main-header'>📢 Управление рекламой</div>", unsafe_allow_html=True)
@@ -1279,7 +1295,7 @@ elif page == "📢 Реклама":
                 df = pd.DataFrame(df_data)
                 st.dataframe(
                     df,
-                    width='stretch',
+                    use_container_width=True,
                     column_config={
                         'ID': st.column_config.NumberColumn(width='small'),
                         'Название': st.column_config.TextColumn(width='medium', max_chars=40),
@@ -1354,7 +1370,7 @@ elif page == "💰 Управление ценами":
         items_per_page = st.selectbox("На странице:", [20, 50, 100], index=0)
     
     with col3:
-        if st.button("🔄 Загрузить", type="primary", width='stretch'):
+        if st.button("🔄 Загрузить", type="primary", use_container_width=True):
             st.session_state.price_products_loaded = False
             st.session_state.price_edit_data = {}
             st.session_state.selected_products = set()
@@ -1364,7 +1380,7 @@ elif page == "💰 Управление ценами":
         # Кнопка отправки изменений (активна только при выборе товаров)
         selected_count = len(st.session_state.selected_products)
         if selected_count > 0:
-            if st.button(f"✅ Отправить ({selected_count})", type="primary", width='stretch'):
+            if st.button(f"✅ Отправить ({selected_count})", type="primary", use_container_width=True):
                 # Отправляем только выбранные товары
                 changes = []
                 for nm_id in st.session_state.selected_products:
@@ -1582,7 +1598,7 @@ elif page == "💰 Управление ценами":
         col_bottom1, col_bottom2, col_bottom3 = st.columns([1, 2, 1])
         
         with col_bottom1:
-            if st.button("✓ Выбрать все", width='stretch'):
+            if st.button("✓ Выбрать все", use_container_width=True):
                 for p in all_products:
                     st.session_state.selected_products.add(p['nmID'])
                 st.rerun()
@@ -1592,7 +1608,7 @@ elif page == "💰 Управление ценами":
             pass
         
         with col_bottom3:
-            if st.button("✗ Очистить выбор", width='stretch'):
+            if st.button("✗ Очистить выбор", use_container_width=True):
                 st.session_state.selected_products = set()
                 st.rerun()
 
