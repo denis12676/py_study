@@ -49,7 +49,7 @@ class PricingContext:
     title: str
     current_price: float          # цена без скидки (розничная)
     current_discount: int         # текущая скидка в %
-    stock_fbo: int                # остаток на складе WB (FBO)
+    stock_total: int              # суммарный остаток FBO + FBS
     avg_daily_orders: float       # среднее число заказов в день за 30 дней
     days_without_sales: int       # дней подряд без продаж
     revenue_30d: float            # выручка за 30 дней, руб.
@@ -58,6 +58,23 @@ class PricingContext:
     def discounted_price(self) -> float:
         """Цена покупателя после скидки."""
         return round(self.current_price * (1 - self.current_discount / 100), 2)
+
+    @property
+    def days_of_stock(self) -> float:
+        """
+        Оборачиваемость: сколько дней хватит текущего запаса при текущей скорости продаж.
+
+        Примеры:
+          stock=100, avg_daily_orders=10  → 10 дней  (дефицит)
+          stock=100, avg_daily_orders=0.5 → 200 дней (затоваривание)
+          stock=0                         → 0 дней
+          stock>0, avg_daily_orders=0     → inf (нет продаж, склад стоит)
+        """
+        if self.stock_total <= 0:
+            return 0.0
+        if self.avg_daily_orders <= 0:
+            return float("inf")
+        return round(self.stock_total / self.avg_daily_orders, 1)
 
 
 @dataclass
@@ -164,18 +181,18 @@ class StockStrategy(PricingStrategy):
         return "StockStrategy"
 
     def evaluate(self, ctx: PricingContext) -> Optional[PriceAction]:
-        if ctx.stock_fbo < self.low_threshold:
+        if ctx.stock_total < self.low_threshold:
             new_price = ctx.current_price * (1 + self.low_markup)
             reason = (
-                f"Остаток FBO {ctx.stock_fbo} шт < {self.low_threshold} шт → "
+                f"Остаток FBO+FBS {ctx.stock_total} шт < {self.low_threshold} шт → "
                 f"наценка +{int(self.low_markup * 100)}%"
             )
             return self._make_action(ctx, new_price, ctx.current_discount, reason)
 
-        if ctx.stock_fbo > self.high_threshold:
+        if ctx.stock_total > self.high_threshold:
             new_discount = ctx.current_discount + self.high_discount
             reason = (
-                f"Остаток FBO {ctx.stock_fbo} шт > {self.high_threshold} шт → "
+                f"Остаток FBO+FBS {ctx.stock_total} шт > {self.high_threshold} шт → "
                 f"скидка +{self.high_discount}%"
             )
             return self._make_action(ctx, ctx.current_price, new_discount, reason)
@@ -184,7 +201,78 @@ class StockStrategy(PricingStrategy):
 
 
 # ---------------------------------------------------------------------------
-# Стратегия 2: По скорости продаж / дням без продаж
+# Стратегия 2: По оборачиваемости (скорость заказов × остаток)
+# ---------------------------------------------------------------------------
+
+class TurnoverStrategy(PricingStrategy):
+    """
+    Ценообразование на основе оборачиваемости склада.
+
+    Оборачиваемость = stock_total / avg_daily_orders (дней запаса).
+
+    Логика:
+      - Мало дней запаса (< understock_days) → товар разбирают быстро,
+        поднять цену на markup %
+      - Много дней запаса (> overstock_days) → товар залёживается,
+        добавить скидку на discount_delta %
+
+    Почему лучше чистого остатка:
+      100 шт при 10 заказов/день = 10 дней → нужно поднять цену
+      100 шт при 0.5 заказа/день = 200 дней → нужна скидка
+      10 шт при 0.1 заказа/день  = 100 дней → цену трогать не нужно
+
+    Пример:
+        TurnoverStrategy(understock_days=7,  markup=0.10,
+                         overstock_days=60,  discount_delta=7)
+    """
+
+    def __init__(
+        self,
+        understock_days: int = 7,
+        markup: float = 0.10,
+        overstock_days: int = 60,
+        discount_delta: int = 7,
+        max_discount: int = 60,
+    ):
+        self.understock_days = understock_days
+        self.markup          = markup
+        self.overstock_days  = overstock_days
+        self.discount_delta  = discount_delta
+        self.max_discount    = max_discount
+
+    @property
+    def name(self) -> str:
+        return "TurnoverStrategy"
+
+    def evaluate(self, ctx: PricingContext) -> Optional[PriceAction]:
+        days = ctx.days_of_stock
+
+        if days == 0:
+            return None  # нет товара — не трогаем цену
+
+        if days < self.understock_days:
+            new_price = ctx.current_price * (1 + self.markup)
+            reason = (
+                f"Запас на {days:.1f} дн < {self.understock_days} дн "
+                f"({ctx.stock_total} шт / {ctx.avg_daily_orders:.1f} зак/день) → "
+                f"наценка +{int(self.markup * 100)}%"
+            )
+            return self._make_action(ctx, new_price, ctx.current_discount, reason)
+
+        if days > self.overstock_days:
+            new_discount = min(ctx.current_discount + self.discount_delta, self.max_discount)
+            reason = (
+                f"Запас на {days:.1f} дн > {self.overstock_days} дн "
+                f"({ctx.stock_total} шт / {ctx.avg_daily_orders:.1f} зак/день) → "
+                f"скидка +{self.discount_delta}%"
+            )
+            return self._make_action(ctx, ctx.current_price, new_discount, reason)
+
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Стратегия 3: По скорости продаж / дням без продаж
 # ---------------------------------------------------------------------------
 
 class ConversionStrategy(PricingStrategy):
@@ -220,7 +308,7 @@ class ConversionStrategy(PricingStrategy):
         return "ConversionStrategy"
 
     def evaluate(self, ctx: PricingContext) -> Optional[PriceAction]:
-        if ctx.days_without_sales >= self.no_sales_days and ctx.stock_fbo > 0:
+        if ctx.days_without_sales >= self.no_sales_days and ctx.stock_total > 0:
             new_discount = min(ctx.current_discount + self.discount_delta, self.max_discount)
             reason = (
                 f"Нет продаж {ctx.days_without_sales} дней → "
@@ -381,7 +469,7 @@ class PricingEngine:
     Args:
         products_mgr:  ProductsManager (для получения цен и обновления)
         analytics_mgr: AnalyticsManager (для продаж и скорости заказов)
-        inventory_mgr: InventoryManager (для остатков FBO)
+        inventory_mgr: InventoryManager (для остатков FBO + FBS)
         strategies:    Список стратегий в порядке приоритета.
                        Применяется первая стратегия, вернувшая действие.
         analytics_days: Горизонт анализа продаж (по умолчанию 30 дней)
@@ -417,8 +505,13 @@ class PricingEngine:
 
         nm_ids = [g["nmID"] for g in goods]
 
-        # 2. Остатки FBO: {nmId: quantity}
+        # 2. Суммарные остатки FBO + FBS: {nmId: quantity}
         fbo_stocks = self._get_fbo_stocks_map()
+        fbs_stocks = self._get_fbs_stocks_map()
+        total_stocks = {
+            nm_id: fbo_stocks.get(nm_id, 0) + fbs_stocks.get(nm_id, 0)
+            for nm_id in set(fbo_stocks) | set(fbs_stocks)
+        }
 
         # 3. Скорость заказов: {nm_id: avg_daily_orders}
         avg_orders_map: Dict[int, float] = {}
@@ -449,7 +542,7 @@ class PricingEngine:
                 title=g.get("subjectName", g.get("vendorCode", str(nm_id))),
                 current_price=float(price),
                 current_discount=int(discount),
-                stock_fbo=fbo_stocks.get(nm_id, 0),
+                stock_total=total_stocks.get(nm_id, 0),
                 avg_daily_orders=float(avg_orders_map.get(nm_id, 0)),
                 days_without_sales=days_without_sales.get(nm_id, 0),
                 revenue_30d=revenue_map.get(nm_id, 0.0),
@@ -460,7 +553,7 @@ class PricingEngine:
         return contexts
 
     def _get_fbo_stocks_map(self) -> Dict[int, int]:
-        """Преобразовать список FBO-остатков в словарь {nmId: quantity}."""
+        """Остатки FBO (склад WB): {nmId: quantity}."""
         result: Dict[int, int] = {}
         try:
             stocks = self.inventory.get_fbo_stocks()
@@ -471,6 +564,21 @@ class PricingEngine:
                     result[int(nm_id)] = result.get(int(nm_id), 0) + int(qty)
         except Exception as e:
             logger.warning("PricingEngine: ошибка получения FBO остатков: %s", e)
+        return result
+
+    def _get_fbs_stocks_map(self) -> Dict[int, int]:
+        """Остатки FBS (склад продавца) по всем складам: {nmId: quantity}."""
+        result: Dict[int, int] = {}
+        try:
+            all_wh = self.inventory.get_all_fbs_stocks()  # {warehouse_id: [stocks]}
+            for stocks in all_wh.values():
+                for s in stocks:
+                    nm_id = s.get("nmId")
+                    qty   = s.get("amount", 0)
+                    if nm_id:
+                        result[int(nm_id)] = result.get(int(nm_id), 0) + int(qty)
+        except Exception as e:
+            logger.warning("PricingEngine: ошибка получения FBS остатков: %s", e)
         return result
 
     def _calc_days_without_sales(self, nm_ids: List[int]) -> Dict[int, int]:

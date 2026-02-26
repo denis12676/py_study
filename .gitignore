@@ -51,6 +51,8 @@ Thumbs.db
 *.csv
 *.xlsx
 *.log
+*.db
+verify_all.py
 reports/
 nul
 

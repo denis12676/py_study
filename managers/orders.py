@@ -4,9 +4,10 @@ OrdersManager — управление заказами FBS, DBS.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from wb_client import WildberriesAPI
+from wb_client import WildberriesAPI, API_ENDPOINTS
+from models import Order
 
 logger = logging.getLogger(__name__)
 
@@ -17,36 +18,44 @@ class OrdersManager:
     def __init__(self, api: WildberriesAPI):
         self.api = api
 
-    def get_new_orders(self, limit: int = 100) -> List[Dict]:
+    def get_new_orders(self, limit: int = 100) -> List[Order]:
         """
         Получить новые заказы для сборки.
 
-        Args:
-            limit: Лимит заказов
-
         Returns:
-            Список заказов
+            Список моделей Order
         """
-        response = self.api.get(
-            "/api/v3/orders",
-            params={
-                "limit": limit,
-                "dateFrom": (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-            },
-            base_url=self.api.config.marketplace_url
-        )
-        return response.get("orders", [])
+        try:
+            response = self.api.get(
+                "/api/v3/orders",
+                params={
+                    "limit": limit,
+                    "next": 0,
+                    "dateFrom": int((datetime.now() - timedelta(days=7)).timestamp())
+                },
+                base_url=self.api.config.marketplace_url
+            )
+            orders_raw = response.get("orders", [])
+            return [Order.model_validate(o) for o in orders_raw]
+        except Exception as e:
+            logger.error(f"Error fetching new orders: {e}")
+            return []
+
+    def get_order_status(self, order_ids: List[int]) -> List[Dict]:
+        """Получить текущие статусы заказов."""
+        try:
+            response = self.api.post(
+                "/api/v3/orders/status",
+                data={"orders": order_ids},
+                base_url=self.api.config.marketplace_url
+            )
+            return response.get("orders", [])
+        except Exception as e:
+            logger.error(f"Error fetching order statuses: {e}")
+            return []
 
     def confirm_assembly(self, order_id: int) -> bool:
-        """
-        Подтвердить сборку заказа.
-
-        Args:
-            order_id: ID заказа
-
-        Returns:
-            True если успешно
-        """
+        """Подтвердить сборку заказа."""
         try:
             self.api.patch(
                 f"/api/v3/orders/{order_id}/confirm",
@@ -54,27 +63,5 @@ class OrdersManager:
             )
             return True
         except Exception as e:
-            logger.error("Ошибка подтверждения сборки заказа %d: %s", order_id, e)
-            return False
-
-    def cancel_order(self, order_id: int, reason: str = "Нет в наличии") -> bool:
-        """
-        Отменить заказ.
-
-        Args:
-            order_id: ID заказа
-            reason: Причина отмены
-
-        Returns:
-            True если успешно
-        """
-        try:
-            self.api.patch(
-                f"/api/v3/orders/{order_id}/cancel",
-                data={"reason": reason},
-                base_url=self.api.config.marketplace_url
-            )
-            return True
-        except Exception as e:
-            logger.error("Ошибка отмены заказа %d: %s", order_id, e)
+            logger.error(f"Error confirming assembly for order {order_id}: {e}")
             return False
