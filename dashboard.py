@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_agent import WildberriesAIAgent
 from styles import get_dark_theme_css
 from logging_config import setup_logging
-from auth_utils import login_user, create_user
+from auth_utils import login_user, create_user, init_db
 from ui_pages.home import render_home_page
 from ui_pages.analytics import render_analytics_page
 from ui_pages.products import render_products_page
@@ -23,6 +23,9 @@ from ui_pages.accounting import render_accounting_page
 
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Initialize DB tables
+init_db()
 
 DB_PATH = Path(__file__).parent / "wb_cache.db"
 
