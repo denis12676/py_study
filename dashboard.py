@@ -117,7 +117,7 @@ if not st.session_state.agent:
         )
         st.sidebar.info("💡 Токен можно получить в личном кабинете WB: Профиль → API Интеграции")
     
-    if st.sidebar.button("🚀 Подключиться", type="primary", use_container_width=True):
+    if st.sidebar.button("🚀 Подключиться", type="primary", width='stretch'):
         if api_token:
             try:
                 with st.spinner("Подключение к WB API..."):
@@ -298,42 +298,42 @@ st.sidebar.markdown("""
 
 # Analytics Section
 st.sidebar.markdown("<div class='nav-section-title'>Аналитика</div>", unsafe_allow_html=True)
-if st.sidebar.button("📊 Аналитика", key="nav_analytics", use_container_width=True,
+if st.sidebar.button("📊 Аналитика", key="nav_analytics", width='stretch',
              type="primary" if st.session_state.current_page == "📊 Аналитика" else "secondary"):
     st.session_state.current_page = "📊 Аналитика"
     st.rerun()
 
 # Products Section
 st.sidebar.markdown("<div class='nav-section-title'>Товары</div>", unsafe_allow_html=True)
-if st.sidebar.button("📦 Товары", key="nav_products", use_container_width=True,
+if st.sidebar.button("📦 Товары", key="nav_products", width='stretch',
              type="primary" if st.session_state.current_page == "📦 Товары" else "secondary"):
     st.session_state.current_page = "📦 Товары"
     st.rerun()
 
 # Prices Section
 st.sidebar.markdown("<div class='nav-section-title'>Цены</div>", unsafe_allow_html=True)
-if st.sidebar.button("💰 Управление ценами", key="nav_prices", use_container_width=True,
+if st.sidebar.button("💰 Управление ценами", key="nav_prices", width='stretch',
              type="primary" if st.session_state.current_page == "💰 Управление ценами" else "secondary"):
     st.session_state.current_page = "💰 Управление ценами"
     st.rerun()
 
 # Inventory Section
 st.sidebar.markdown("<div class='nav-section-title'>Склад и остатки</div>", unsafe_allow_html=True)
-if st.sidebar.button("📋 Остатки", key="nav_inventory", use_container_width=True,
+if st.sidebar.button("📋 Остатки", key="nav_inventory", width='stretch',
              type="primary" if st.session_state.current_page == "📋 Остатки" else "secondary"):
     st.session_state.current_page = "📋 Остатки"
     st.rerun()
 
 # AI Chat Section
 st.sidebar.markdown("<div class='nav-section-title'>AI Помощник</div>", unsafe_allow_html=True)
-if st.sidebar.button("💬 AI Чат", key="nav_chat", use_container_width=True,
+if st.sidebar.button("💬 AI Чат", key="nav_chat", width='stretch',
              type="primary" if st.session_state.current_page == "💬 AI Чат" else "secondary"):
     st.session_state.current_page = "💬 AI Чат"
     st.rerun()
 
 # Marketing Section
 st.sidebar.markdown("<div class='nav-section-title'>Маркетинг</div>", unsafe_allow_html=True)
-if st.sidebar.button("📢 Реклама", key="nav_ads", use_container_width=True,
+if st.sidebar.button("📢 Реклама", key="nav_ads", width='stretch',
              type="primary" if st.session_state.current_page == "📢 Реклама" else "secondary"):
     st.session_state.current_page = "📢 Реклама"
     st.rerun()
@@ -341,7 +341,7 @@ if st.sidebar.button("📢 Реклама", key="nav_ads", use_container_width=T
 st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
 
 # Home
-if st.sidebar.button("🏠 Главная", key="nav_home", use_container_width=True,
+if st.sidebar.button("🏠 Главная", key="nav_home", width='stretch',
              type="primary" if st.session_state.current_page == "🏠 Главная" else "secondary"):
     st.session_state.current_page = "🏠 Главная"
     st.rerun()
@@ -354,11 +354,11 @@ _stats = _cache_inst.stats()
 st.sidebar.caption(
     f"✅ {_stats['alive']} записей  |  ⏳ {_stats['expired']} устаревших"
 )
-if st.sidebar.button("🗑️ Очистить кэш БД", key="clear_db_cache", use_container_width=True, type="secondary"):
+if st.sidebar.button("🗑️ Очистить кэш БД", key="clear_db_cache", width='stretch', type="secondary"):
     _cache_inst.clear()
     st.sidebar.success("Кэш очищен")
     st.rerun()
-if st.sidebar.button("♻️ Удалить устаревшие", key="purge_db_cache", use_container_width=True, type="secondary"):
+if st.sidebar.button("♻️ Удалить устаревшие", key="purge_db_cache", width='stretch', type="secondary"):
     removed = _cache_inst.purge_expired()
     st.sidebar.success(f"Удалено {removed} записей")
     st.rerun()
@@ -468,19 +468,19 @@ if page == "🏠 Главная":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📦 Показать товары", use_container_width=True):
+            if st.button("📦 Показать товары", width='stretch'):
                 st.session_state.quick_action = "products"
         
         with col2:
-            if st.button("💰 Выручка", use_container_width=True):
+            if st.button("💰 Выручка", width='stretch'):
                 st.session_state.quick_action = "revenue"
         
         with col3:
-            if st.button("🔥 Топ товаров", use_container_width=True):
+            if st.button("🔥 Топ товаров", width='stretch'):
                 st.session_state.quick_action = "top"
         
         with col4:
-            if st.button("📢 Реклама", use_container_width=True):
+            if st.button("📢 Реклама", width='stretch'):
                 st.session_state.quick_action = "campaigns"
         
         # Second row
@@ -488,7 +488,7 @@ if page == "🏠 Главная":
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📊 Отчет за неделю", use_container_width=True):
+            if st.button("📊 Отчет за неделю", width='stretch'):
                 st.session_state.quick_action = "weekly"
         
         # Execute quick action
@@ -519,7 +519,7 @@ if page == "🏠 Главная":
                             df = pd.DataFrame(df_data)
                             st.dataframe(
                                 df,
-                                use_container_width=True,
+                                width='stretch',
                                 column_config={
                                     'Артикул': st.column_config.NumberColumn(width='small'),
                                     'Название': st.column_config.TextColumn(width='medium', max_chars=50),
@@ -564,7 +564,7 @@ if page == "🏠 Главная":
                             df = pd.DataFrame(campaigns)
                             st.dataframe(
                                 df,
-                                use_container_width=True,
+                                width='stretch',
                                 column_config={
                                     'ID': st.column_config.NumberColumn(width='small'),
                                     'Название': st.column_config.TextColumn(width='medium', max_chars=40),
@@ -592,7 +592,7 @@ if page == "🏠 Главная":
                                 df_daily = pd.DataFrame(report['daily_breakdown'])
                                 st.dataframe(
                                     df_daily,
-                                    use_container_width=True,
+                                    width='stretch',
                                     column_config={
                                         'date': st.column_config.TextColumn(width='small', max_chars=10),
                                         'revenue': st.column_config.NumberColumn(width='small', format='%.2f'),
@@ -606,7 +606,7 @@ if page == "🏠 Главная":
                                 df_products = pd.DataFrame(report['top_products'][:10])
                                 st.dataframe(
                                     df_products,
-                                    use_container_width=True,
+                                    width='stretch',
                                     column_config={
                                         'nm_id': st.column_config.NumberColumn(width='small'),
                                         'name': st.column_config.TextColumn(width='medium', max_chars=40),
@@ -754,7 +754,7 @@ elif page == "📦 Товары":
                     df = pd.DataFrame(df_data)
                     st.dataframe(
                         df,
-                        use_container_width=True,
+                        width='stretch',
                         column_config={
                             'Артикул': st.column_config.NumberColumn(width='small'),
                             'Название': st.column_config.TextColumn(width='medium', max_chars=50),
@@ -804,7 +804,7 @@ elif page == "📦 Товары":
 elif page == "📋 Остатки":
     st.markdown("<div class='main-header'>📋 Остатки товаров</div>", unsafe_allow_html=True)
     
-    tab_fbs, tab_fbo = st.tabs(["📦 FBS (склад продавца)", "🏭 FBO (склад WB)"])
+    tab_fbs, tab_fbo, tab_summary = st.tabs(["FBS (склад продавца)", "FBO (склад WB)", "Сводка по артикулам"])
     
     with tab_fbs:
         st.markdown("### 📦 Остатки на складе продавца (FBS)")
@@ -858,7 +858,7 @@ elif page == "📋 Остатки":
                             df = pd.DataFrame(df_data)
                             st.dataframe(
                                 df,
-                                use_container_width=True,
+                                width='stretch',
                                 column_config={
                                     'Баркод': st.column_config.TextColumn(width='small', max_chars=20),
                                     'Артикул продавца': st.column_config.TextColumn(width='small', max_chars=20),
@@ -969,7 +969,7 @@ elif page == "📋 Остатки":
                             df_filtered = df[df['Склад'] == selected_warehouse]
                             st.dataframe(
                                 df_filtered,
-                                use_container_width=True,
+                                width='stretch',
                                 hide_index=True,
                                 column_config={
                                     'Артикул WB': st.column_config.NumberColumn(width='small', format='%d'),
@@ -984,7 +984,7 @@ elif page == "📋 Остатки":
                         else:
                             st.dataframe(
                                 df,
-                                use_container_width=True,
+                                width='stretch',
                                 hide_index=True,
                                 column_config={
                                     'Артикул WB': st.column_config.NumberColumn(width='small', format='%d'),
@@ -1040,6 +1040,86 @@ elif page == "📋 Остатки":
                     traceback.print_exc()
                     st.error(f"❌ Ошибка загрузки: {e}")
                     st.code(traceback.format_exc())
+
+
+    with tab_summary:
+        st.markdown("### Сводка остатков по всем артикулам (FBS + FBO)")
+        st.caption("Таблица собирается по всем складам и всем артикулам")
+
+        if st.button("Собрать сводную таблицу", type="primary", key="stocks_summary_build"):
+            with st.spinner("Собираем остатки FBS и FBO..."):
+                try:
+                    # FBS: aggregate by (nmId, vendorCode)
+                    fbs_by_key = {}
+                    all_fbs_stocks = st.session_state.agent.inventory.get_all_fbs_stocks()
+                    for _, stocks in all_fbs_stocks.items():
+                        for stock in stocks:
+                            nm_id = stock.get("nmId")
+                            article = str(stock.get("vendorCode", "") or "").strip()
+                            key = (nm_id, article)
+                            qty = int(stock.get("amount", 0) or 0)
+                            fbs_by_key[key] = fbs_by_key.get(key, 0) + qty
+
+                    # FBO: aggregate by (nmId, supplierArticle)
+                    fbo_by_key = {}
+                    fbo_stocks = st.session_state.agent.inventory.get_fbo_stocks(use_cache=True, force_refresh=False)
+                    for stock in fbo_stocks:
+                        nm_id = stock.get("nmId")
+                        article = str(stock.get("supplierArticle", "") or "").strip()
+                        key = (nm_id, article)
+                        qty = int(stock.get("quantity", 0) or 0)
+                        fbo_by_key[key] = fbo_by_key.get(key, 0) + qty
+
+                    all_keys = set(fbs_by_key.keys()) | set(fbo_by_key.keys())
+                    rows = []
+                    for nm_id, article in all_keys:
+                        fbs_qty = fbs_by_key.get((nm_id, article), 0)
+                        fbo_qty = fbo_by_key.get((nm_id, article), 0)
+                        total_qty = fbs_qty + fbo_qty
+                        rows.append({
+                            "Артикул": article,
+                            "nmID": nm_id,
+                            "Остаток FBS": fbs_qty,
+                            "Остаток FBO": fbo_qty,
+                            "Общий остаток": total_qty,
+                        })
+
+                    if rows:
+                        df_summary = pd.DataFrame(rows)
+                        nm_ids_series = pd.to_numeric(df_summary["nmID"], errors="coerce").dropna().astype(int)
+                        nm_ids = sorted({int(v) for v in nm_ids_series.tolist() if int(v) > 0})
+                        avg_orders_map = st.session_state.agent.analytics.get_avg_orders_by_nm_ids(nm_ids, days=30, stock_type="")
+
+                        nm_id_numeric = pd.to_numeric(df_summary["nmID"], errors="coerce")
+                        df_summary["Скорость заказов в день"] = nm_id_numeric.map(
+                            lambda x: round(float(avg_orders_map.get(int(x), 0)), 2) if pd.notna(x) else 0.0
+                        )
+                        df_summary["На сколько дней хватит"] = df_summary.apply(
+                            lambda r: round((r["Общий остаток"] / r["Скорость заказов в день"]), 1)
+                            if r["Скорость заказов в день"] > 0 else None,
+                            axis=1
+                        )
+
+                        df_summary = df_summary.sort_values(by=["Общий остаток", "Артикул"], ascending=[False, True])
+                        st.dataframe(df_summary, width='stretch', hide_index=True)
+
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Артикулов", len(df_summary))
+                        col2.metric("Суммарный FBS", int(df_summary["Остаток FBS"].sum()))
+                        col3.metric("Суммарный FBO", int(df_summary["Остаток FBO"].sum()))
+
+                        csv = df_summary.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            "Скачать CSV",
+                            csv,
+                            "stocks_summary_all_articles.csv",
+                            "text/csv",
+                            key="stocks_summary_download",
+                        )
+                    else:
+                        st.info("Данные по остаткам не найдены")
+                except Exception as e:
+                    st.error(f"Ошибка при построении сводки: {e}")
 
 elif page == "📊 Аналитика":
     st.markdown("<div class='main-header'>📊 Аналитика продаж</div>", unsafe_allow_html=True)
@@ -1142,7 +1222,7 @@ elif page == "📊 Аналитика":
                 st.dataframe(
                     df_details,
                     hide_index=True,
-                    use_container_width=True,
+                    width='stretch',
                     column_config={
                         'Показатель': st.column_config.TextColumn(width='medium', max_chars=40),
                         'Значение': st.column_config.TextColumn(width='medium', max_chars=40),
@@ -1199,7 +1279,7 @@ elif page == "📢 Реклама":
                 df = pd.DataFrame(df_data)
                 st.dataframe(
                     df,
-                    use_container_width=True,
+                    width='stretch',
                     column_config={
                         'ID': st.column_config.NumberColumn(width='small'),
                         'Название': st.column_config.TextColumn(width='medium', max_chars=40),
@@ -1274,7 +1354,7 @@ elif page == "💰 Управление ценами":
         items_per_page = st.selectbox("На странице:", [20, 50, 100], index=0)
     
     with col3:
-        if st.button("🔄 Загрузить", type="primary", use_container_width=True):
+        if st.button("🔄 Загрузить", type="primary", width='stretch'):
             st.session_state.price_products_loaded = False
             st.session_state.price_edit_data = {}
             st.session_state.selected_products = set()
@@ -1284,7 +1364,7 @@ elif page == "💰 Управление ценами":
         # Кнопка отправки изменений (активна только при выборе товаров)
         selected_count = len(st.session_state.selected_products)
         if selected_count > 0:
-            if st.button(f"✅ Отправить ({selected_count})", type="primary", use_container_width=True):
+            if st.button(f"✅ Отправить ({selected_count})", type="primary", width='stretch'):
                 # Отправляем только выбранные товары
                 changes = []
                 for nm_id in st.session_state.selected_products:
@@ -1502,7 +1582,7 @@ elif page == "💰 Управление ценами":
         col_bottom1, col_bottom2, col_bottom3 = st.columns([1, 2, 1])
         
         with col_bottom1:
-            if st.button("✓ Выбрать все", use_container_width=True):
+            if st.button("✓ Выбрать все", width='stretch'):
                 for p in all_products:
                     st.session_state.selected_products.add(p['nmID'])
                 st.rerun()
@@ -1512,7 +1592,7 @@ elif page == "💰 Управление ценами":
             pass
         
         with col_bottom3:
-            if st.button("✗ Очистить выбор", use_container_width=True):
+            if st.button("✗ Очистить выбор", width='stretch'):
                 st.session_state.selected_products = set()
                 st.rerun()
 

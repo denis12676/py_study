@@ -18,7 +18,7 @@ def dataframe_with_export(df: pd.DataFrame, filename: str, title: str = "") -> N
     """Render a dataframe with a CSV download button (used 15+ times)."""
     if title:
         st.subheader(title)
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width='stretch')
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("⬇ Скачать CSV", csv, filename, "text/csv")
 
