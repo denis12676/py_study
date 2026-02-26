@@ -61,6 +61,24 @@ class AnalyticsManager:
             return int(numeric)
         return None
 
+
+    @classmethod
+    def _normalize_avg_orders_map(cls, raw_map: Any) -> Dict[int, float]:
+        """Convert cached JSON map keys back to int nmIDs."""
+        if not isinstance(raw_map, dict):
+            return {}
+
+        normalized: Dict[int, float] = {}
+        for raw_key, raw_value in raw_map.items():
+            nm_id = cls._to_int_nm_id(raw_key)
+            if nm_id is None:
+                continue
+            try:
+                normalized[nm_id] = float(raw_value or 0)
+            except (TypeError, ValueError):
+                normalized[nm_id] = 0.0
+        return normalized
+
     def get_sales(
         self,
         date_from: Optional[str] = None,
@@ -100,7 +118,6 @@ class AnalyticsManager:
             base_url=API_ENDPOINTS["statistics"]
         )
         result = response if isinstance(response, list) else []
-
         # Do not cache empty result too aggressively; it is often caused by temporary API lag.
         if result:
             self._cache.set(cache_key, result)
@@ -508,14 +525,16 @@ class AnalyticsManager:
             return {}
 
         cache_key = self._cache.make_key(
-            "get_avg_orders_by_nm_ids_v2",
+            "get_avg_orders_by_nm_ids_v3",
             nm_ids=valid_ids,
             days=days,
             stock_type=stock_type,
         )
         cached = self._cache.get(cache_key)
         if cached is not None:
-            return cached
+            normalized_cached = self._normalize_avg_orders_map(cached)
+            if normalized_cached:
+                return normalized_cached
 
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=max(days - 1, 0))
@@ -638,6 +657,8 @@ class AnalyticsManager:
                 if qty_by_nm.get(nm_id, 0) > 0:
                     result[nm_id] = round(qty_by_nm[nm_id] / period_days, 4)
 
-        self._cache.set(cache_key, result)
+        # Avoid persisting all-zero/empty speeds: this is often a temporary API gap.
+        if any(float(v or 0) > 0 for v in result.values()):
+            self._cache.set(cache_key, result)
         return result
 
