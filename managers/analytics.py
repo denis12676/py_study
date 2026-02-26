@@ -662,66 +662,229 @@ class AnalyticsManager:
             self._cache.set(cache_key, result)
         return result
 
-    def get_margin_by_product(self, days: int = 30) -> List[Dict]:
+    def _get_db_connection(self):
+        """Get database connection for financial reports."""
+        import sqlite3
+        from pathlib import Path
+        db_path = Path(__file__).parent.parent / "wb_cache.db"
+        conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def load_and_save_reports(self, days: int = 90) -> Dict[str, Any]:
+        """
+        Загрузить детальные отчеты из WB API и сохранить в локальную БД.
+        
+        Args:
+            days: Количество дней для загрузки (по умолчанию 90)
+            
+        Returns:
+            Статистика загрузки: {"loaded": int, "saved": int, "errors": int}
+        """
+        logger.info(f"Starting report loading for {days} days...")
+        
+        date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        date_to = datetime.now().strftime("%Y-%m-%d")
+        
+        all_reports = []
+        rrdid = 0
+        total_loaded = 0
+        
+        # Загружаем отчеты порциями (пагинация API)
+        while True:
+            self._wait_between_calls(2.0)
+            
+            try:
+                response = self.api.get(
+                    "/api/v5/supplier/reportDetailByPeriod",
+                    params={
+                        "dateFrom": date_from,
+                        "dateTo": date_to,
+                        "limit": 100000,
+                        "rrdid": rrdid
+                    },
+                    base_url=API_ENDPOINTS["statistics"]
+                )
+                
+                if not response or len(response) == 0:
+                    break
+                
+                batch_size = len(response)
+                total_loaded += batch_size
+                all_reports.extend(response)
+                
+                logger.info(f"Loaded batch: {batch_size} records, total: {total_loaded}")
+                
+                # Если меньше 100k записей, значит это последняя порция
+                if batch_size < 100000:
+                    break
+                
+                # Получаем rrd_id из последней записи для следующего запроса
+                rrdid = response[-1].get("rrd_id", 0)
+                
+            except Exception as e:
+                logger.error(f"Error loading reports: {e}")
+                break
+        
+        logger.info(f"Total records loaded from API: {len(all_reports)}")
+        
+        # Сохраняем в БД
+        saved_count = 0
+        error_count = 0
+        
+        if all_reports:
+            with self._get_db_connection() as conn:
+                for item in all_reports:
+                    try:
+                        # Определяем тип операции
+                        oper_name = item.get("supplier_oper_name", "").lower()
+                        is_return = "возврат" in oper_name or "отмена" in oper_name
+                        
+                        # Дата операции
+                        rr_dt = item.get("rr_dt", date_to)
+                        
+                        conn.execute("""
+                            INSERT OR REPLACE INTO financial_reports 
+                            (report_date, nm_id, vendor_code, subject_name, brand_name,
+                             supplier_oper_name, retail_amount, for_pay, commission,
+                             delivery, storage, penalty, quantity, is_return)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            rr_dt,
+                            item.get("nm_id"),
+                            item.get("sa_name", ""),
+                            item.get("subject_name", ""),
+                            item.get("brand_name", ""),
+                            item.get("supplier_oper_name", ""),
+                            float(item.get("retail_amount", 0) or 0),
+                            float(item.get("ppvz_for_pay", 0) or 0),
+                            float(item.get("ppvz_sales_commission", 0) or 0),
+                            float(item.get("delivery_rub", 0) or 0),
+                            float(item.get("storage_fee", 0) or 0),
+                            float(item.get("penalty", 0) or 0),
+                            int(item.get("quantity", 0) or 0),
+                            is_return
+                        ))
+                        saved_count += 1
+                        
+                    except Exception as e:
+                        error_count += 1
+                        if error_count <= 5:  # Логируем только первые 5 ошибок
+                            logger.warning(f"Error saving record: {e}")
+                
+                conn.commit()
+        
+        logger.info(f"Saved {saved_count} records to database, errors: {error_count}")
+        
+        return {
+            "loaded": len(all_reports),
+            "saved": saved_count,
+            "errors": error_count,
+            "date_from": date_from,
+            "date_to": date_to
+        }
+
+    def get_reports_from_db(self, days: int = 30) -> List[Dict]:
+        """
+        Получить отчеты из локальной БД за указанный период.
+        
+        Args:
+            days: Количество дней
+            
+        Returns:
+            Список записей отчетов
+        """
+        date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        
+        with self._get_db_connection() as conn:
+            cursor = conn.execute(
+                """SELECT * FROM financial_reports 
+                   WHERE report_date >= ? 
+                   ORDER BY report_date DESC, nm_id""",
+                (date_from,)
+            )
+            rows = cursor.fetchall()
+            
+        return [dict(row) for row in rows]
+
+    def get_db_stats(self) -> Dict[str, Any]:
+        """Получить статистику по данным в БД."""
+        with self._get_db_connection() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM financial_reports"
+            ).fetchone()[0]
+            
+            date_range = conn.execute(
+                "SELECT MIN(report_date), MAX(report_date) FROM financial_reports"
+            ).fetchone()
+            
+            unique_products = conn.execute(
+                "SELECT COUNT(DISTINCT nm_id) FROM financial_reports"
+            ).fetchone()[0]
+            
+        return {
+            "total_records": total,
+            "date_from": date_range[0] if date_range else None,
+            "date_to": date_range[1] if date_range else None,
+            "unique_products": unique_products
+        }
+
+    def get_margin_by_product(self, days: int = 30, use_local_db: bool = True) -> List[Dict]:
         """
         Рассчитать фактическую маржинальность по каждому товару
         на основе детального отчёта WB (/api/v5/supplier/reportDetailByPeriod).
+
+        Может работать с локальной базой данных (быстро) или загружать из API (медленно).
 
         WB не передаёт себестоимость, поэтому считаем две метрики:
           - wb_cost_rate   — сколько % от выручки уходит в WB (комиссия + логистика + хранение + штрафы)
           - net_payout_rate — сколько % от выручки остаётся продавцу (forPay / retailAmount)
 
-        Полная маржа = net_payout_rate - доля_себестоимости.
-        Если ввести себестоимость, метод вернёт gross_margin_rate.
-
         Args:
             days: Глубина отчёта в днях (по умолчанию 30).
+            use_local_db: Использовать локальную базу данных (быстрее). 
+                         Если False - загружает из API (медленно, 1-2 минуты).
 
         Returns:
-            Список словарей, отсортированных по выручке (убывание):
-            {
-                nm_id, vendor_code, subject, brand,
-                sales_count, returns_count, return_rate,
-                gross_revenue,           — выручка (сумма продаж без возвратов)
-                returns_amount,          — сумма возвратов
-                net_payout,             — к выплате от WB (forPay, все операции)
-                avg_retail_price,        — средняя цена продажи
-                avg_net_payout,          — средняя выплата за единицу
-                wb_commission,           — комиссия WB
-                logistics_cost,          — логистика
-                storage_cost,            — хранение
-                penalties,               — штрафы
-                total_wb_costs,          — итого расходы WB
-                wb_cost_rate,            — % выручки, уходящий в WB
-                net_payout_rate,         — % выручки, остающийся продавцу
-            }
+            Список словарей, отсортированных по выручке (убывание).
         """
-        date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-
-        cache_key = self._cache.make_key("get_margin_by_product", date_from=date_from)
+        cache_key = self._cache.make_key("get_margin_by_product", days=days, use_local_db=use_local_db)
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
-        self._wait_between_calls(2.0)
-        report = self.get_detailed_report(date_from=date_from, limit=100000)
+        # Получаем отчеты
+        if use_local_db:
+            logger.info(f"Getting margin data from local DB for {days} days...")
+            report = self.get_reports_from_db(days=days)
+            logger.info(f"Loaded {len(report)} records from local DB")
+        else:
+            # Загружаем из API
+            date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            logger.info(f"Getting margin data from API for {days} days from {date_from}...")
+            
+            self._wait_between_calls(2.0)
+            report = self.get_detailed_report(date_from=date_from, limit=100000)
+            logger.info(f"Loaded {len(report)} records from API")
+        
         if not report:
+            logger.warning(f"No data available for margin calculation")
             return []
 
         # Агрегируем по nmId
         agg: Dict[int, Dict] = {}
 
         for item in report:
-            nm_id = self._to_int_nm_id(item.get("nmId"))
+            nm_id = self._to_int_nm_id(item.get("nm_id"))
             if nm_id is None:
                 continue
 
             if nm_id not in agg:
                 agg[nm_id] = {
                     "nm_id":          nm_id,
-                    "vendor_code":    item.get("supplierArticle", ""),
-                    "subject":        item.get("subject", ""),
-                    "brand":          item.get("brand", ""),
+                    "vendor_code":    item.get("vendor_code", ""),
+                    "subject":        item.get("subject_name", ""),
+                    "brand":          item.get("brand_name", ""),
                     "sales_count":    0,
                     "returns_count":  0,
                     "gross_revenue":  0.0,
@@ -734,14 +897,20 @@ class AnalyticsManager:
                 }
 
             row = agg[nm_id]
-            is_return = item.get("isReturn", False) or item.get("isCancel", False)
-
-            retail_amount  = float(item.get("retailAmount",    0) or 0)
-            for_pay        = float(item.get("forPay",          0) or 0)
-            commission     = float(item.get("commissionAmount",0) or 0)
-            delivery       = float(item.get("deliveryAmount",  0) or 0)
-            storage        = float(item.get("storageFee",      0) or 0)
-            penalty        = float(item.get("penalty",         0) or 0)
+            
+            # Определяем тип операции
+            is_return = item.get("is_return", False)
+            oper_name = item.get("supplier_oper_name", "").lower()
+            if not is_return:
+                is_return = "возврат" in oper_name or "отмена" in oper_name
+            
+            # Получаем суммы
+            retail_amount  = float(item.get("retail_amount", 0) or 0)
+            for_pay        = float(item.get("for_pay", 0) or item.get("ppvz_for_pay", 0) or 0)
+            commission     = float(item.get("commission", 0) or item.get("ppvz_sales_commission", 0) or 0)
+            delivery       = float(item.get("delivery", 0) or item.get("delivery_rub", 0) or 0)
+            storage        = float(item.get("storage", 0) or item.get("storage_fee", 0) or 0)
+            penalty        = float(item.get("penalty", 0) or 0)
 
             row["net_payout"]     += for_pay
             row["wb_commission"]  += commission
@@ -758,8 +927,16 @@ class AnalyticsManager:
 
         # Рассчитываем производные метрики
         result = []
+        skipped_zero_data = 0
         for row in agg.values():
-            if row["sales_count"] == 0:
+            # Показываем товары у которых есть любые операции
+            total_operations = row["sales_count"] + row["returns_count"]
+            has_financial_data = (row["net_payout"] != 0 or row["wb_commission"] != 0 or 
+                                  row["logistics_cost"] != 0 or row["storage_cost"] != 0 or 
+                                  row["penalties"] != 0 or total_operations > 0)
+            
+            if not has_financial_data:
+                skipped_zero_data += 1
                 continue
 
             gross  = row["gross_revenue"]
@@ -767,17 +944,19 @@ class AnalyticsManager:
             wb_costs = (row["wb_commission"] + row["logistics_cost"]
                         + row["storage_cost"] + row["penalties"])
 
-            total_ops = row["sales_count"] + row["returns_count"]
+            total_ops = max(row["sales_count"] + row["returns_count"], 1)
+            
+            avg_price = round(gross / row["sales_count"], 2) if row["sales_count"] > 0 else 0
+            avg_payout = round(payout / total_ops, 2) if total_ops > 0 else 0
 
             result.append({
                 **row,
                 "total_wb_costs":  round(wb_costs, 2),
-                "avg_retail_price": round(gross / row["sales_count"], 2),
-                "avg_net_payout":   round(payout / row["sales_count"], 2),
-                "return_rate":      round(row["returns_count"] / total_ops * 100, 1) if total_ops else 0.0,
-                "wb_cost_rate":     round(wb_costs / gross * 100, 1) if gross else 0.0,
-                "net_payout_rate":  round(payout / gross * 100, 1) if gross else 0.0,
-                # округляем денежные поля
+                "avg_retail_price": avg_price,
+                "avg_net_payout":   avg_payout,
+                "return_rate":      round(row["returns_count"] / total_ops * 100, 1) if total_ops > 0 else 0.0,
+                "wb_cost_rate":     round(wb_costs / gross * 100, 1) if gross > 0 else 0.0,
+                "net_payout_rate":  round(payout / gross * 100, 1) if gross > 0 else 0.0,
                 "gross_revenue":    round(gross, 2),
                 "returns_amount":   round(row["returns_amount"], 2),
                 "net_payout":       round(payout, 2),
@@ -786,7 +965,9 @@ class AnalyticsManager:
                 "storage_cost":     round(row["storage_cost"], 2),
                 "penalties":        round(row["penalties"], 2),
             })
-
+        
+        logger.info(f"Result: {len(result)} products with data, skipped {skipped_zero_data} with no operations")
+        
         result.sort(key=lambda x: x["gross_revenue"], reverse=True)
 
         if result:

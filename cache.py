@@ -72,6 +72,7 @@ class SQLiteCache:
 
     def _init_db(self) -> None:
         with self._connect() as conn:
+            # Существующая таблица кеша
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS api_cache (
                     key        TEXT PRIMARY KEY,
@@ -81,6 +82,35 @@ class SQLiteCache:
             """)
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_expires ON api_cache(expires_at)"
+            )
+            
+            # Новая таблица для финансовых отчетов (постоянное хранение)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS financial_reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_date TEXT NOT NULL,
+                    nm_id INTEGER NOT NULL,
+                    vendor_code TEXT,
+                    subject_name TEXT,
+                    brand_name TEXT,
+                    supplier_oper_name TEXT,
+                    retail_amount REAL DEFAULT 0,
+                    for_pay REAL DEFAULT 0,
+                    commission REAL DEFAULT 0,
+                    delivery REAL DEFAULT 0,
+                    storage REAL DEFAULT 0,
+                    penalty REAL DEFAULT 0,
+                    quantity INTEGER DEFAULT 0,
+                    is_return BOOLEAN DEFAULT 0,
+                    created_at REAL DEFAULT (strftime('%s', 'now')),
+                    UNIQUE(report_date, nm_id, supplier_oper_name)
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_reports_date ON financial_reports(report_date)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_reports_nm ON financial_reports(nm_id)"
             )
 
     # ------------------------------------------------------------------

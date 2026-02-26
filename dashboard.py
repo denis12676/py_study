@@ -1318,37 +1318,121 @@ elif page == "📊 Аналитика":
     with tab_margin:
         st.markdown("### 💰 Маржинальность по товарам")
         st.markdown("""
-        Расчет на основе детального отчета WB. Показывает:
-        - **Выручка** - сумма продаж без возвратов
-        - **К выплате** - чистая сумма от WB (с вычетом всех комиссий)
-        - **Расходы WB** - комиссия + логистика + хранение + штрафы
-        - **% расходов** - какую часть выручки забирает WB
-        - **% к выплате** - какую часть выручки получает продавец
+        Расчет на основе детального отчета WB. 
+        
+        **Как работать:**
+        1. Сначала загрузите отчеты из WB (один раз)
+        2. Затем рассчитывайте маржу (мгновенно из локальной базы)
         """)
+        
+        # === СЕКЦИЯ УПРАВЛЕНИЯ ОТЧЕТАМИ ===
+        st.markdown("---")
+        st.markdown("#### 📥 Загрузка отчетов из Wildberries")
+        
+        # Проверяем статус базы данных
+        try:
+            db_stats = st.session_state.agent.analytics.get_db_stats()
+            
+            col_db1, col_db2, col_db3 = st.columns(3)
+            with col_db1:
+                st.metric("Записей в базе", f"{db_stats['total_records']:,}")
+            with col_db2:
+                st.metric("Уникальных товаров", db_stats['unique_products'])
+            with col_db3:
+                date_range_text = ""
+                if db_stats['date_from'] and db_stats['date_to']:
+                    date_range_text = f"{db_stats['date_from']} - {db_stats['date_to']}"
+                st.metric("Период данных", date_range_text if date_range_text else "Нет данных")
+            
+        except Exception as e:
+            st.warning(f"Не удалось получить статистику БД: {e}")
+        
+        # Кнопка загрузки отчетов
+        col_load1, col_load2 = st.columns([2, 1])
+        
+        with col_load1:
+            load_days = st.selectbox(
+                "Загрузить отчеты за:",
+                ["30 дней", "60 дней", "90 дней", "180 дней"],
+                index=2,
+                key="load_reports_days"
+            )
+            load_days_num = {"30 дней": 30, "60 дней": 60, "90 дней": 90, "180 дней": 180}[load_days]
+        
+        with col_load2:
+            if st.button("📥 Загрузить отчеты", type="primary", key="load_reports_btn"):
+                with st.spinner(f"Загрузка отчетов за {load_days_num} дней из WB... Это может занять 2-3 минуты..."):
+                    try:
+                        # Очищаем старые данные перед загрузкой новых
+                        if st.checkbox("Очистить старые данные перед загрузкой", value=True, key="clear_old_data"):
+                            import sqlite3
+                            from pathlib import Path
+                            db_path = Path(__file__).parent / "wb_cache.db"
+                            conn = sqlite3.connect(str(db_path), check_same_thread=False)
+                            conn.execute("DELETE FROM financial_reports")
+                            conn.commit()
+                            conn.close()
+                            st.info("Старые данные очищены")
+                        
+                        # Загружаем отчеты
+                        result = st.session_state.agent.analytics.load_and_save_reports(days=load_days_num)
+                        
+                        st.success(f"✅ Загружено {result['loaded']} записей, сохранено {result['saved']}, ошибок: {result['errors']}")
+                        st.info(f"Период: {result['date_from']} - {result['date_to']}")
+                        
+                        # Обновляем страницу для отображения новой статистики
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"❌ Ошибка загрузки: {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
+        
+        # === СЕКЦИЯ РАСЧЕТА МАРЖИ ===
+        st.markdown("---")
+        st.markdown("#### 📊 Расчет маржинальности")
         
         col_m1, col_m2, col_m3 = st.columns([2, 2, 1])
         
         with col_m1:
-            margin_period = st.selectbox("Период:", ["7 дней", "30 дней", "90 дней"], key="margin_period")
+            margin_period = st.selectbox("Период анализа:", ["7 дней", "30 дней", "90 дней"], key="margin_period")
             margin_days = {"7 дней": 7, "30 дней": 30, "90 дней": 90}[margin_period]
         
         with col_m2:
-            min_revenue = st.number_input("Мин. выручка (₽):", min_value=0, value=1000, step=1000, key="min_revenue")
+            min_revenue = st.number_input("Мин. выручка (₽):", min_value=0, value=0, step=1000, key="min_revenue")
         
         with col_m3:
-            if st.button("🔄 Рассчитать", type="primary", key="margin_refresh"):
-                with st.spinner("Загрузка детального отчета... Это может занять 1-2 минуты..."):
+            if st.button("📊 Рассчитать", type="primary", key="margin_refresh"):
+                with st.spinner("Расчет маржинальности из локальной базы..."):
                     try:
-                        margin_data = st.session_state.agent.analytics.get_margin_by_product(days=margin_days)
+                        # Расчет из локальной БД (быстро!)
+                        margin_data = st.session_state.agent.analytics.get_margin_by_product(
+                            days=margin_days, 
+                            use_local_db=True
+                        )
                         st.session_state.margin_data = margin_data
-                        st.success(f"✅ Загружено {len(margin_data)} товаров")
+                        
+                        if margin_data:
+                            st.success(f"✅ Расчет выполнен: {len(margin_data)} товаров")
+                        else:
+                            st.warning("⚠️ Нет данных за выбранный период. Загрузите отчеты из WB.")
+                            
                     except Exception as e:
                         error_msg = str(e)
-                        if "429" in error_msg or "rate" in error_msg.lower():
-                            st.error("⚠️ Превышен лимит запросов к API")
-                            st.info("💡 Подождите 1-2 минуты и попробуйте снова")
+                        st.error(f"❌ Ошибка: {error_msg}")
+                        import traceback
+                        st.code(traceback.format_exc())
+                        
+                        if margin_data:
+                            st.success(f"✅ Загружено {len(margin_data)} товаров с продажами")
                         else:
-                            st.error(f"❌ Ошибка: {error_msg}")
+                            st.warning("⚠️ Загружено 0 товаров. Проверьте наличие продаж за выбранный период.")
+                            
+                    except Exception as e:
+                        error_msg = str(e)
+                        st.error(f"❌ Ошибка: {error_msg}")
+                        import traceback
+                        st.code(traceback.format_exc())
         
         # Отображение таблицы маржинальности
         if 'margin_data' in st.session_state and st.session_state.margin_data:
