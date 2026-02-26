@@ -1150,14 +1150,50 @@ elif page == "📋 Остатки":
 elif page == "📊 Аналитика":
     st.markdown("<div class='main-header'>📊 Аналитика продаж</div>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([2, 2, 1])
+    # Создаем вкладки для разных типов аналитики
+    tab_analytics, tab_margin = st.tabs(["📈 Общая аналитика", "💰 Маржинальность"])
     
-    with col1:
-        period = st.selectbox("Период:", ["7 дней", "30 дней", "90 дней"])
-        days = {"7 дней": 7, "30 дней": 30, "90 дней": 90}[period]
-    
-    with col2:
-        detail_level = st.selectbox("Детализация:", ["Простая", "Детальная (с вычетами)"])
+    # Вкладка 1: Общая аналитика (существующий функционал)
+    with tab_analytics:
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            period = st.selectbox("Период:", ["7 дней", "30 дней", "90 дней"], key="analytics_period")
+            days = {"7 дней": 7, "30 дней": 30, "90 дней": 90}[period]
+        
+        with col2:
+            detail_level = st.selectbox("Детализация:", ["Простая", "Детальная (с вычетами)"], key="analytics_detail")
+        
+        with col3:
+            if st.button("🔄 Обновить", type="primary", key="analytics_refresh"):
+                with st.spinner("Загрузка аналитики..."):
+                    try:
+                        # Revenue
+                        if detail_level == "Детальная (с вычетами)":
+                            revenue = st.session_state.agent.analytics.calculate_revenue_detailed(days=days)
+                        else:
+                            revenue = st.session_state.agent.analytics.calculate_revenue(days=days)
+                        st.session_state.revenue_data = revenue
+                        
+                        # Top products
+                        top = st.session_state.agent.analytics.get_top_products(days=days, limit=20)
+                        st.session_state.top_products = top
+                        
+                        # Sales data
+                        sales = st.session_state.agent.analytics.get_sales(
+                            date_from=(datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+                        )
+                        st.session_state.sales_data = sales
+                        
+                        st.success("Данные обновлены!")
+                        
+                    except Exception as e:
+                        error_msg = str(e)
+                        if "429" in error_msg or "Слишком много" in error_msg or "Rate limit" in error_msg:
+                            st.error("⚠️ Превышен лимит запросов к API Wildberries")
+                            st.info("💡 Пожалуйста, подождите 1-2 минуты и попробуйте снова. API статистики имеет ограничение: 1 запрос в минуту.")
+                        else:
+                            st.error(f"❌ Ошибка загрузки данных: {error_msg}")
     
     with col3:
         if st.button("🔄 Обновить", type="primary"):
@@ -1277,6 +1313,128 @@ elif page == "📊 Аналитика":
             labels={'name': 'Товар', 'revenue': 'Выручка (₽)'}
         )
         st.plotly_chart(fig, use_container_width=True)
+    
+    # Вкладка 2: Маржинальность по товарам
+    with tab_margin:
+        st.markdown("### 💰 Маржинальность по товарам")
+        st.markdown("""
+        Расчет на основе детального отчета WB. Показывает:
+        - **Выручка** - сумма продаж без возвратов
+        - **К выплате** - чистая сумма от WB (с вычетом всех комиссий)
+        - **Расходы WB** - комиссия + логистика + хранение + штрафы
+        - **% расходов** - какую часть выручки забирает WB
+        - **% к выплате** - какую часть выручки получает продавец
+        """)
+        
+        col_m1, col_m2, col_m3 = st.columns([2, 2, 1])
+        
+        with col_m1:
+            margin_period = st.selectbox("Период:", ["7 дней", "30 дней", "90 дней"], key="margin_period")
+            margin_days = {"7 дней": 7, "30 дней": 30, "90 дней": 90}[margin_period]
+        
+        with col_m2:
+            min_revenue = st.number_input("Мин. выручка (₽):", min_value=0, value=1000, step=1000, key="min_revenue")
+        
+        with col_m3:
+            if st.button("🔄 Рассчитать", type="primary", key="margin_refresh"):
+                with st.spinner("Загрузка детального отчета... Это может занять 1-2 минуты..."):
+                    try:
+                        margin_data = st.session_state.agent.analytics.get_margin_by_product(days=margin_days)
+                        st.session_state.margin_data = margin_data
+                        st.success(f"✅ Загружено {len(margin_data)} товаров")
+                    except Exception as e:
+                        error_msg = str(e)
+                        if "429" in error_msg or "rate" in error_msg.lower():
+                            st.error("⚠️ Превышен лимит запросов к API")
+                            st.info("💡 Подождите 1-2 минуты и попробуйте снова")
+                        else:
+                            st.error(f"❌ Ошибка: {error_msg}")
+        
+        # Отображение таблицы маржинальности
+        if 'margin_data' in st.session_state and st.session_state.margin_data:
+            df_data = []
+            for item in st.session_state.margin_data:
+                # Фильтр по минимальной выручке
+                if item['gross_revenue'] < min_revenue:
+                    continue
+                    
+                df_data.append({
+                    'Артикул WB': item['nm_id'],
+                    'Артикул продавца': item['vendor_code'],
+                    'Предмет': item['subject'],
+                    'Бренд': item['brand'],
+                    'Продажи': item['sales_count'],
+                    'Возвраты': item['returns_count'],
+                    'Возврат %': f"{item['return_rate']:.1f}%",
+                    'Выручка': item['gross_revenue'],
+                    'К выплате': item['net_payout'],
+                    'Расходы WB': item['total_wb_costs'],
+                    'Комиссия': item['wb_commission'],
+                    'Логистика': item['logistics_cost'],
+                    'Хранение': item['storage_cost'],
+                    'Штрафы': item['penalties'],
+                    'Ср. цена': item['avg_retail_price'],
+                    '% расходов': f"{item['wb_cost_rate']:.1f}%",
+                    '% к выплате': f"{item['net_payout_rate']:.1f}%",
+                })
+            
+            if df_data:
+                df = pd.DataFrame(df_data)
+                
+                # Итоговая статистика
+                total_revenue = sum(item['gross_revenue'] for item in st.session_state.margin_data)
+                total_payout = sum(item['net_payout'] for item in st.session_state.margin_data)
+                total_costs = sum(item['total_wb_costs'] for item in st.session_state.margin_data)
+                avg_cost_rate = (total_costs / total_revenue * 100) if total_revenue > 0 else 0
+                
+                col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+                with col_stat1:
+                    st.metric("Общая выручка", f"{total_revenue:,.0f} ₽")
+                with col_stat2:
+                    st.metric("К выплате", f"{total_payout:,.0f} ₽")
+                with col_stat3:
+                    st.metric("Расходы WB", f"{total_costs:,.0f} ₽")
+                with col_stat4:
+                    st.metric("Средний % расходов", f"{avg_cost_rate:.1f}%")
+                
+                # Таблица
+                st.markdown("#### 📋 Детализация по товарам")
+                st.dataframe(
+                    df,
+                    use_container_width=True,
+                    column_config={
+                        'Артикул WB': st.column_config.NumberColumn(width='small'),
+                        'Артикул продавца': st.column_config.TextColumn(width='medium'),
+                        'Предмет': st.column_config.TextColumn(width='medium'),
+                        'Бренд': st.column_config.TextColumn(width='small'),
+                        'Продажи': st.column_config.NumberColumn(width='small'),
+                        'Возвраты': st.column_config.NumberColumn(width='small'),
+                        'Возврат %': st.column_config.TextColumn(width='small'),
+                        'Выручка': st.column_config.NumberColumn(width='small', format='%d ₽'),
+                        'К выплате': st.column_config.NumberColumn(width='small', format='%d ₽'),
+                        'Расходы WB': st.column_config.NumberColumn(width='small', format='%d ₽'),
+                        'Комиссия': st.column_config.NumberColumn(width='small', format='%d ₽'),
+                        'Логистика': st.column_config.NumberColumn(width='small', format='%d ₽'),
+                        'Хранение': st.column_config.NumberColumn(width='small', format='%d ₽'),
+                        'Штрафы': st.column_config.NumberColumn(width='small', format='%d ₽'),
+                        'Ср. цена': st.column_config.NumberColumn(width='small', format='%d ₽'),
+                        '% расходов': st.column_config.TextColumn(width='small'),
+                        '% к выплате': st.column_config.TextColumn(width='small'),
+                    },
+                    hide_index=True
+                )
+                
+                # CSV экспорт
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📥 Скачать CSV",
+                    csv,
+                    f"margin_analysis_{margin_days}days.csv",
+                    "text/csv",
+                    key="margin_csv_download"
+                )
+            else:
+                st.info(f"ℹ️ Нет товаров с выручкой выше {min_revenue} ₽")
 
 elif page == "📢 Реклама":
     st.markdown("<div class='main-header'>📢 Управление рекламой</div>", unsafe_allow_html=True)
@@ -1627,7 +1785,7 @@ elif page == "🤖 Автоцены":
 
     from pricing_strategy import (
         PricingEngine, StockStrategy, ConversionStrategy,
-        MarginStrategy, SeasonStrategy, SeasonPeriod,
+        TurnoverStrategy, MarginStrategy, SeasonStrategy, SeasonPeriod,
     )
     from price_history import PriceHistoryDB
     from scheduler import PriceScheduler
@@ -1658,6 +1816,16 @@ elif page == "🤖 Автоцены":
             stock_low_mul  = c2.number_input("Наценка %",          min_value=1,   value=10,   key="stk_low_mul")
             stock_high_thr = c3.number_input("Много шт (порог)",   min_value=10,  value=150,  key="stk_high_thr")
             stock_high_dis = c4.number_input("Скидка % (при много)", min_value=1, value=5,    key="stk_high_dis")
+
+        # --- TurnoverStrategy ---
+        with st.expander("🔄 По оборачиваемости (TurnoverStrategy)", expanded=True):
+            use_turnover = st.checkbox("Включить", value=True, key="strat_turnover_on")
+            st.caption("Оборачиваемость = остаток ÷ заказов/день. Показывает, на сколько дней хватит запаса.")
+            c1, c2, c3, c4 = st.columns(4)
+            turn_under_days = c1.number_input("Дефицит (дней запаса <)",  min_value=1, value=7,  key="turn_under")
+            turn_markup     = c2.number_input("Наценка при дефиците %",   min_value=1, value=10, key="turn_markup")
+            turn_over_days  = c3.number_input("Затоваривание (дней запаса >)", min_value=10, value=60, key="turn_over")
+            turn_discount   = c4.number_input("Скидка при затоваривании %", min_value=1, value=7, key="turn_discount")
 
         # --- ConversionStrategy ---
         with st.expander("📉 По активности продаж (ConversionStrategy)", expanded=True):
@@ -1694,6 +1862,13 @@ elif page == "🤖 Автоцены":
                     low_markup=stock_low_mul / 100,
                     high_threshold=stock_high_thr,
                     high_discount=stock_high_dis,
+                ))
+            if use_turnover:
+                strategies.append(TurnoverStrategy(
+                    understock_days=turn_under_days,
+                    markup=turn_markup / 100,
+                    overstock_days=turn_over_days,
+                    discount_delta=turn_discount,
                 ))
             if use_conv:
                 strategies.append(ConversionStrategy(

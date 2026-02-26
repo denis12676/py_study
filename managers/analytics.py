@@ -662,3 +662,134 @@ class AnalyticsManager:
             self._cache.set(cache_key, result)
         return result
 
+    def get_margin_by_product(self, days: int = 30) -> List[Dict]:
+        """
+        Рассчитать фактическую маржинальность по каждому товару
+        на основе детального отчёта WB (/api/v5/supplier/reportDetailByPeriod).
+
+        WB не передаёт себестоимость, поэтому считаем две метрики:
+          - wb_cost_rate   — сколько % от выручки уходит в WB (комиссия + логистика + хранение + штрафы)
+          - net_payout_rate — сколько % от выручки остаётся продавцу (forPay / retailAmount)
+
+        Полная маржа = net_payout_rate - доля_себестоимости.
+        Если ввести себестоимость, метод вернёт gross_margin_rate.
+
+        Args:
+            days: Глубина отчёта в днях (по умолчанию 30).
+
+        Returns:
+            Список словарей, отсортированных по выручке (убывание):
+            {
+                nm_id, vendor_code, subject, brand,
+                sales_count, returns_count, return_rate,
+                gross_revenue,           — выручка (сумма продаж без возвратов)
+                returns_amount,          — сумма возвратов
+                net_payout,             — к выплате от WB (forPay, все операции)
+                avg_retail_price,        — средняя цена продажи
+                avg_net_payout,          — средняя выплата за единицу
+                wb_commission,           — комиссия WB
+                logistics_cost,          — логистика
+                storage_cost,            — хранение
+                penalties,               — штрафы
+                total_wb_costs,          — итого расходы WB
+                wb_cost_rate,            — % выручки, уходящий в WB
+                net_payout_rate,         — % выручки, остающийся продавцу
+            }
+        """
+        date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        cache_key = self._cache.make_key("get_margin_by_product", date_from=date_from)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        self._wait_between_calls(2.0)
+        report = self.get_detailed_report(date_from=date_from, limit=100000)
+        if not report:
+            return []
+
+        # Агрегируем по nmId
+        agg: Dict[int, Dict] = {}
+
+        for item in report:
+            nm_id = self._to_int_nm_id(item.get("nmId"))
+            if nm_id is None:
+                continue
+
+            if nm_id not in agg:
+                agg[nm_id] = {
+                    "nm_id":          nm_id,
+                    "vendor_code":    item.get("supplierArticle", ""),
+                    "subject":        item.get("subject", ""),
+                    "brand":          item.get("brand", ""),
+                    "sales_count":    0,
+                    "returns_count":  0,
+                    "gross_revenue":  0.0,
+                    "returns_amount": 0.0,
+                    "net_payout":     0.0,
+                    "wb_commission":  0.0,
+                    "logistics_cost": 0.0,
+                    "storage_cost":   0.0,
+                    "penalties":      0.0,
+                }
+
+            row = agg[nm_id]
+            is_return = item.get("isReturn", False) or item.get("isCancel", False)
+
+            retail_amount  = float(item.get("retailAmount",    0) or 0)
+            for_pay        = float(item.get("forPay",          0) or 0)
+            commission     = float(item.get("commissionAmount",0) or 0)
+            delivery       = float(item.get("deliveryAmount",  0) or 0)
+            storage        = float(item.get("storageFee",      0) or 0)
+            penalty        = float(item.get("penalty",         0) or 0)
+
+            row["net_payout"]     += for_pay
+            row["wb_commission"]  += commission
+            row["logistics_cost"] += delivery
+            row["storage_cost"]   += storage
+            row["penalties"]      += penalty
+
+            if is_return:
+                row["returns_count"]  += 1
+                row["returns_amount"] += retail_amount
+            else:
+                row["sales_count"]    += 1
+                row["gross_revenue"]  += retail_amount
+
+        # Рассчитываем производные метрики
+        result = []
+        for row in agg.values():
+            if row["sales_count"] == 0:
+                continue
+
+            gross  = row["gross_revenue"]
+            payout = row["net_payout"]
+            wb_costs = (row["wb_commission"] + row["logistics_cost"]
+                        + row["storage_cost"] + row["penalties"])
+
+            total_ops = row["sales_count"] + row["returns_count"]
+
+            result.append({
+                **row,
+                "total_wb_costs":  round(wb_costs, 2),
+                "avg_retail_price": round(gross / row["sales_count"], 2),
+                "avg_net_payout":   round(payout / row["sales_count"], 2),
+                "return_rate":      round(row["returns_count"] / total_ops * 100, 1) if total_ops else 0.0,
+                "wb_cost_rate":     round(wb_costs / gross * 100, 1) if gross else 0.0,
+                "net_payout_rate":  round(payout / gross * 100, 1) if gross else 0.0,
+                # округляем денежные поля
+                "gross_revenue":    round(gross, 2),
+                "returns_amount":   round(row["returns_amount"], 2),
+                "net_payout":       round(payout, 2),
+                "wb_commission":    round(row["wb_commission"], 2),
+                "logistics_cost":   round(row["logistics_cost"], 2),
+                "storage_cost":     round(row["storage_cost"], 2),
+                "penalties":        round(row["penalties"], 2),
+            })
+
+        result.sort(key=lambda x: x["gross_revenue"], reverse=True)
+
+        if result:
+            self._cache.set(cache_key, result)
+        return result
+
