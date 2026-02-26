@@ -46,6 +46,12 @@ if 'products_data' not in st.session_state:
     st.session_state.products_data = None
 if 'sales_data' not in st.session_state:
     st.session_state.sales_data = None
+if 'ap_scheduler' not in st.session_state:
+    st.session_state.ap_scheduler = None   # PriceScheduler instance
+if 'ap_last_actions' not in st.session_state:
+    st.session_state.ap_last_actions = []  # последние PriceAction
+if 'ap_history_db' not in st.session_state:
+    st.session_state.ap_history_db = None  # PriceHistoryDB instance
 
 # Sidebar
 st.sidebar.markdown("""
@@ -331,6 +337,10 @@ st.sidebar.markdown("<div class='nav-section-title'>Цены</div>", unsafe_allo
 if st.sidebar.button("💰 Управление ценами", key="nav_prices", use_container_width=True,
              type="primary" if st.session_state.current_page == "💰 Управление ценами" else "secondary"):
     st.session_state.current_page = "💰 Управление ценами"
+    st.rerun()
+if st.sidebar.button("🤖 Автоцены", key="nav_autoprices", use_container_width=True,
+             type="primary" if st.session_state.current_page == "🤖 Автоцены" else "secondary"):
+    st.session_state.current_page = "🤖 Автоцены"
     st.rerun()
 
 # Inventory Section
@@ -1611,6 +1621,361 @@ elif page == "💰 Управление ценами":
             if st.button("✗ Очистить выбор", use_container_width=True):
                 st.session_state.selected_products = set()
                 st.rerun()
+
+elif page == "🤖 Автоцены":
+    st.markdown("<div class='main-header'>🤖 Автоматическое ценообразование</div>", unsafe_allow_html=True)
+
+    from pricing_strategy import (
+        PricingEngine, StockStrategy, ConversionStrategy,
+        MarginStrategy, SeasonStrategy, SeasonPeriod,
+    )
+    from price_history import PriceHistoryDB
+    from scheduler import PriceScheduler
+
+    agent = st.session_state.agent
+
+    # Инициализируем PriceHistoryDB один раз
+    if st.session_state.ap_history_db is None:
+        st.session_state.ap_history_db = PriceHistoryDB()
+    db: PriceHistoryDB = st.session_state.ap_history_db
+
+    tab_strat, tab_sched, tab_hist = st.tabs(
+        ["⚙️ Стратегии", "🕐 Расписание", "📋 История изменений"]
+    )
+
+    # ------------------------------------------------------------------ #
+    #  TAB 1 — СТРАТЕГИИ                                                   #
+    # ------------------------------------------------------------------ #
+    with tab_strat:
+        st.markdown("### Настройка стратегий")
+        st.caption("Включите нужные стратегии, задайте параметры и запустите расчёт.")
+
+        # --- StockStrategy ---
+        with st.expander("📦 По остаткам (StockStrategy)", expanded=True):
+            use_stock = st.checkbox("Включить", value=True, key="strat_stock_on")
+            c1, c2, c3, c4 = st.columns(4)
+            stock_low_thr  = c1.number_input("Мало шт (порог)",    min_value=1,   value=10,   key="stk_low_thr")
+            stock_low_mul  = c2.number_input("Наценка %",          min_value=1,   value=10,   key="stk_low_mul")
+            stock_high_thr = c3.number_input("Много шт (порог)",   min_value=10,  value=150,  key="stk_high_thr")
+            stock_high_dis = c4.number_input("Скидка % (при много)", min_value=1, value=5,    key="stk_high_dis")
+
+        # --- ConversionStrategy ---
+        with st.expander("📉 По активности продаж (ConversionStrategy)", expanded=True):
+            use_conv = st.checkbox("Включить", value=True, key="strat_conv_on")
+            c1, c2, c3, c4 = st.columns(4)
+            conv_no_sales = c1.number_input("Дней без продаж",  min_value=1,  value=7,   key="conv_days")
+            conv_delta    = c2.number_input("Добавить скидку %", min_value=1, value=5,   key="conv_delta")
+            conv_max      = c3.number_input("Макс скидка %",    min_value=5,  value=50,  key="conv_max")
+            conv_fast_thr = c4.number_input("Быстрые продажи (заказов/день)", min_value=1, value=5, key="conv_fast")
+
+        # --- MarginStrategy ---
+        with st.expander("💹 По марже (MarginStrategy)"):
+            use_margin = st.checkbox("Включить", value=False, key="strat_margin_on")
+            st.caption("Введите себестоимость для каждого артикула через запятую: `nmID:цена, nmID:цена`")
+            cost_input = st.text_area("Себестоимость", placeholder="123456:500, 789012:300", key="margin_costs")
+            c1, c2, c3 = st.columns(3)
+            margin_target = c1.number_input("Целевая маржа %",  min_value=1,  value=25, key="margin_target")
+            margin_comm   = c2.number_input("Комиссия WB %",    min_value=1,  value=15, key="margin_comm")
+            margin_tol    = c3.number_input("Допуск отклонения %", min_value=1, value=5, key="margin_tol")
+
+        # --- SeasonStrategy ---
+        with st.expander("📅 Сезонные периоды (SeasonStrategy)"):
+            use_season = st.checkbox("Включить", value=False, key="strat_season_on")
+            st.caption("Периоды уже включают: Чёрную пятницу (20 нояб–5 дек) и Новый год (20 дек–5 янв).")
+
+        st.markdown("---")
+        col_dry, col_apply = st.columns(2)
+
+        def _build_strategies():
+            strategies = []
+            if use_stock:
+                strategies.append(StockStrategy(
+                    low_threshold=stock_low_thr,
+                    low_markup=stock_low_mul / 100,
+                    high_threshold=stock_high_thr,
+                    high_discount=stock_high_dis,
+                ))
+            if use_conv:
+                strategies.append(ConversionStrategy(
+                    no_sales_days=conv_no_sales,
+                    discount_delta=conv_delta,
+                    max_discount=conv_max,
+                    fast_threshold=float(conv_fast_thr),
+                ))
+            if use_margin and cost_input.strip():
+                try:
+                    costs = {}
+                    for pair in cost_input.split(","):
+                        nm, cost = pair.strip().split(":")
+                        costs[int(nm.strip())] = float(cost.strip())
+                    strategies.append(MarginStrategy(
+                        cost_prices=costs,
+                        target_margin=margin_target / 100,
+                        wb_commission=margin_comm / 100,
+                        tolerance=margin_tol / 100,
+                    ))
+                except Exception:
+                    st.warning("Неверный формат себестоимости. Пример: `123456:500, 789012:300`")
+            if use_season:
+                strategies.append(SeasonStrategy(periods=[
+                    SeasonPeriod("Чёрная пятница",       "11-20", "12-05", discount_add=10),
+                    SeasonPeriod("Новогодняя распродажа", "12-20", "01-05", discount_add=15),
+                ]))
+            return strategies
+
+        with col_dry:
+            if st.button("🔍 Рассчитать (dry-run)", use_container_width=True, type="secondary"):
+                strategies = _build_strategies()
+                if not strategies:
+                    st.warning("Включите хотя бы одну стратегию.")
+                else:
+                    with st.spinner("Анализируем товары..."):
+                        try:
+                            engine = PricingEngine(
+                                agent.products, agent.analytics, agent.inventory,
+                                strategies=strategies,
+                            )
+                            actions = engine.run(dry_run=True)
+                            st.session_state.ap_last_actions = actions
+                            if actions:
+                                st.success(f"Найдено {len(actions)} товаров для переоценки.")
+                            else:
+                                st.info("Все цены оптимальны — изменений не требуется.")
+                        except Exception as e:
+                            st.error(f"Ошибка: {e}")
+
+        with col_apply:
+            if st.button("✅ Применить изменения", use_container_width=True, type="primary"):
+                strategies = _build_strategies()
+                if not strategies:
+                    st.warning("Включите хотя бы одну стратегию.")
+                else:
+                    with st.spinner("Применяем новые цены..."):
+                        try:
+                            engine = PricingEngine(
+                                agent.products, agent.analytics, agent.inventory,
+                                strategies=strategies,
+                            )
+                            actions = engine.run(dry_run=False)
+                            st.session_state.ap_last_actions = actions
+                            db.record_many(actions)
+                            applied = sum(1 for a in actions if a.applied)
+                            st.success(f"Применено {applied} из {len(actions)} изменений. Записано в историю.")
+                        except Exception as e:
+                            st.error(f"Ошибка: {e}")
+
+        # Таблица результатов
+        if st.session_state.ap_last_actions:
+            st.markdown("#### Результаты расчёта")
+            rows = [
+                {
+                    "nmID":        a.nm_id,
+                    "Артикул":     a.vendor_code,
+                    "Название":    a.title,
+                    "Цена было":   int(a.old_price),
+                    "Цена стало":  int(a.new_price),
+                    "Скидка было": f"{a.old_discount}%",
+                    "Скидка стало": f"{a.new_discount}%",
+                    "Стратегия":   a.strategy_name,
+                    "Причина":     a.reason,
+                    "Применено":   "✅" if a.applied else "📋",
+                }
+                for a in st.session_state.ap_last_actions
+            ]
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # ------------------------------------------------------------------ #
+    #  TAB 2 — РАСПИСАНИЕ                                                  #
+    # ------------------------------------------------------------------ #
+    with tab_sched:
+        st.markdown("### Автоматический запуск")
+        st.caption("Планировщик работает в фоне пока открыт браузер с дашбордом.")
+
+        sched: PriceScheduler = st.session_state.ap_scheduler
+
+        # Статус
+        if sched and sched._running:
+            status = sched.get_status()
+            st.success(f"**Статус: запущен** | Следующий прогон: `{status['next_run']}`")
+            st.caption(
+                f"Последний запуск: {status['last_run']}  |  "
+                f"Всего прогонов: {status['total_runs']}  |  "
+                f"Стратегии: {', '.join(status['strategies'])}"
+            )
+        else:
+            st.warning("Планировщик остановлен.")
+
+        st.markdown("---")
+        st.markdown("#### Настройки")
+
+        mode = st.radio("Режим", ["Интервал (каждые N часов)", "Ежедневно в заданное время"],
+                        horizontal=True, key="sched_mode")
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            sched_hours = st.number_input("Каждые часов", min_value=1, max_value=24, value=4, key="sched_hours")
+        with c2:
+            sched_cron_h = st.number_input("Час (0–23)",   min_value=0, max_value=23, value=2,  key="sched_cron_h")
+            sched_cron_m = st.number_input("Минута (0–59)", min_value=0, max_value=59, value=0, key="sched_cron_m")
+        with c3:
+            sched_dry = st.checkbox("Dry-run (не применять)", value=True, key="sched_dry")
+            st.caption("Снимите галочку чтобы реально менять цены.")
+
+        col_start, col_stop, col_now = st.columns(3)
+
+        with col_start:
+            if st.button("▶ Запустить", use_container_width=True, type="primary",
+                         disabled=(sched is not None and sched._running)):
+                strategies = [
+                    StockStrategy(),
+                    ConversionStrategy(),
+                    SeasonStrategy(periods=[
+                        SeasonPeriod("Чёрная пятница",       "11-20", "12-05", discount_add=10),
+                        SeasonPeriod("Новогодняя распродажа", "12-20", "01-05", discount_add=15),
+                    ]),
+                ]
+                engine = PricingEngine(
+                    agent.products, agent.analytics, agent.inventory,
+                    strategies=strategies,
+                )
+                new_sched = PriceScheduler(engine, dry_run=sched_dry)
+                if mode == "Интервал (каждые N часов)":
+                    new_sched.add_interval(hours=sched_hours)
+                else:
+                    new_sched.add_cron(hour=sched_cron_h, minute=sched_cron_m)
+                new_sched.start()
+                st.session_state.ap_scheduler = new_sched
+                st.success("Планировщик запущен.")
+                st.rerun()
+
+        with col_stop:
+            if st.button("⏹ Остановить", use_container_width=True,
+                         disabled=(sched is None or not sched._running)):
+                sched.stop()
+                st.session_state.ap_scheduler = None
+                st.info("Планировщик остановлен.")
+                st.rerun()
+
+        with col_now:
+            if st.button("⚡ Запустить сейчас", use_container_width=True):
+                strategies = [StockStrategy(), ConversionStrategy()]
+                engine = PricingEngine(
+                    agent.products, agent.analytics, agent.inventory,
+                    strategies=strategies,
+                )
+                one_shot = PriceScheduler(engine, dry_run=sched_dry)
+                with st.spinner("Выполняем переоценку..."):
+                    result = one_shot.run_now()
+                db.record_many(result.actions)
+                st.session_state.ap_last_actions = result.actions
+                if result.error:
+                    st.error(f"Ошибка: {result.error}")
+                else:
+                    st.success(str(result))
+
+        # История прогонов планировщика
+        if sched:
+            history = sched.get_history(10)
+            if history:
+                st.markdown("#### Последние прогоны")
+                run_rows = [
+                    {
+                        "Время":       r.started_at.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Режим":       "dry-run" if r.dry_run else "applied",
+                        "Изменений":   r.actions_count,
+                        "Применено":   r.applied_count,
+                        "Длит. (с)":   f"{r.duration_sec:.1f}",
+                        "Ошибка":      r.error or "",
+                    }
+                    for r in reversed(history)
+                ]
+                st.dataframe(pd.DataFrame(run_rows), use_container_width=True, hide_index=True)
+
+    # ------------------------------------------------------------------ #
+    #  TAB 3 — ИСТОРИЯ                                                     #
+    # ------------------------------------------------------------------ #
+    with tab_hist:
+        st.markdown("### Журнал изменений цен")
+
+        # Статистика
+        stats = db.stats()
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Всего записей",    stats["total"])
+        m2.metric("Применено",        stats["applied"])
+        m3.metric("Откатов",          stats["rolled_back"])
+        m4.metric("Уникальных товаров", stats["unique_products"])
+
+        if stats["by_strategy"]:
+            st.caption("По стратегиям: " + "  |  ".join(
+                f"{k}: **{v}**" for k, v in stats["by_strategy"].items()
+            ))
+
+        st.markdown("---")
+
+        # Фильтры
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            hist_date_from = st.date_input("С даты", value=datetime.now() - timedelta(days=30), key="hist_from")
+        with fc2:
+            hist_date_to = st.date_input("По дату", value=datetime.now(), key="hist_to")
+        with fc3:
+            hist_applied = st.checkbox("Только применённые", value=False, key="hist_applied")
+
+        if st.button("🔄 Загрузить историю", key="hist_load"):
+            records = db.get_all(
+                date_from=str(hist_date_from),
+                date_to=str(hist_date_to),
+                applied_only=hist_applied,
+                limit=500,
+            )
+            if records:
+                df_hist = pd.DataFrame(records)[[
+                    "created_at", "nm_id", "vendor_code", "title",
+                    "old_price", "new_price", "old_discount", "new_discount",
+                    "strategy_name", "reason", "applied", "rolled_back",
+                ]]
+                df_hist.columns = [
+                    "Время", "nmID", "Артикул", "Название",
+                    "Цена было", "Цена стало", "Скидка было", "Скидка стало",
+                    "Стратегия", "Причина", "Применено", "Откат",
+                ]
+                df_hist["Применено"] = df_hist["Применено"].map({1: "✅", 0: "📋"})
+                df_hist["Откат"]     = df_hist["Откат"].map({1: "↩️", 0: ""})
+                st.dataframe(df_hist, use_container_width=True, hide_index=True)
+            else:
+                st.info("Нет записей за выбранный период.")
+
+        st.markdown("---")
+        st.markdown("#### Откат изменений")
+
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            rollback_nm = st.number_input("Откатить по nmID:", min_value=1, value=1, key="rb_nm")
+            if st.button("↩️ Откатить последнее изменение", key="rb_one"):
+                with st.spinner("Откат..."):
+                    ok = db.rollback_last(nm_id=rollback_nm, products_mgr=agent.products)
+                if ok:
+                    st.success(f"Цена nmID={rollback_nm} откатана.")
+                else:
+                    st.warning(f"Нет применённых изменений для nmID={rollback_nm}.")
+
+        with rc2:
+            rollback_hours = st.number_input("Откатить все за последние часов:", min_value=1, value=24, key="rb_hours")
+            if st.button("↩️ Откатить все за период", type="secondary", key="rb_all"):
+                with st.spinner(f"Откат всех изменений за {rollback_hours} ч..."):
+                    results = db.rollback_since(hours=rollback_hours, products_mgr=agent.products)
+                success = sum(1 for v in results.values() if v)
+                if results:
+                    st.success(f"Откатано {success} из {len(results)} товаров.")
+                else:
+                    st.info("Нет изменений для отката за этот период.")
+
+        st.markdown("---")
+        with st.expander("🗑️ Очистка старых записей"):
+            purge_days = st.number_input("Удалить записи старше дней:", min_value=7, value=90, key="purge_days")
+            if st.button("Удалить", type="secondary", key="purge_btn"):
+                deleted = db.purge_old(days=purge_days)
+                st.success(f"Удалено {deleted} записей.")
 
 # Footer
 st.sidebar.markdown("---")
