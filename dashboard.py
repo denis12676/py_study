@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ai_agent import WildberriesAIAgent
 from styles import get_dark_theme_css
 from logging_config import setup_logging
-from auth_utils import login_user, create_user, init_db
+from auth_utils import login_user, create_user, init_db, start_session, get_user_by_session, close_session
 from ui_pages.home import render_home_page
 from ui_pages.analytics import render_analytics_page
 from ui_pages.products import render_products_page
@@ -32,7 +32,7 @@ DB_PATH = Path(__file__).parent / "wb_cache.db"
 # --- Session State ---
 def init_session_state():
     defaults = {
-        'user': None, # Здесь будет храниться {id, username}
+        'user': None,
         'agent': None,
         'current_account': None,
         'current_page': "🏠 Главная"
@@ -43,7 +43,20 @@ def init_session_state():
 
 init_session_state()
 
-# --- Auth UI ---
+# --- Auth Logic with persistence ---
+def check_auth_persistence():
+    """Проверка сохраненной сессии в URL"""
+    if st.session_state.user is None:
+        # Проверяем query params
+        session_id = st.query_params.get("session")
+        if session_id:
+            user = get_user_by_session(session_id)
+            if user:
+                st.session_state.user = user
+                logger.info(f"Session restored for user: {user['username']}")
+                return True
+    return False
+
 def render_auth():
     st.markdown("<h1 style='text-align: center;'>🛍️ MultiMarket AI</h1>", unsafe_allow_html=True)
     
@@ -65,13 +78,25 @@ def render_auth():
             else:
                 user = login_user(username, password)
                 if user:
+                    # Создаем долгоживущую сессию
+                    sid = start_session(user['id'])
+                    st.query_params["session"] = sid
                     st.session_state.user = user
                     st.rerun()
                 else:
                     st.error("Неверный логин или пароль")
     st.stop()
 
-# --- Database Helpers (User-Aware) ---
+def logout():
+    sid = st.query_params.get("session")
+    if sid:
+        close_session(sid)
+    st.query_params.clear()
+    st.session_state.user = None
+    st.session_state.agent = None
+    st.rerun()
+
+# --- Database Helpers ---
 def get_accounts():
     user_id = st.session_state.user['id']
     with sqlite3.connect(DB_PATH) as conn:
@@ -86,27 +111,28 @@ def add_account(name, token):
             return True
     except: return False
 
-# --- Main Logic ---
+# --- Main App ---
 def main():
     st.set_page_config(page_title="MultiMarket AI", page_icon="🛍️", layout="wide")
     st.markdown(get_dark_theme_css(), unsafe_allow_html=True)
 
+    # Проверяем сохраненную сессию
+    check_auth_persistence()
+
     if not st.session_state.user:
         render_auth()
 
-    # Сайдбар для авторизованного пользователя
+    # Сайдбар
     st.sidebar.markdown(f"👤 **Пользователь:** {st.session_state.user['username']}")
     if st.sidebar.button("🚪 Выйти из системы"):
-        st.session_state.user = None
-        st.session_state.agent = None
-        st.rerun()
+        logout()
 
     # Управление магазинами
     st.sidebar.markdown("---")
     accounts = get_accounts()
     
     if not accounts:
-        st.sidebar.warning("Добавьте магазин для начала работы")
+        st.sidebar.warning("Добавьте магазин")
     else:
         acc_names = [a['name'] for a in accounts]
         current_idx = 0
@@ -122,7 +148,7 @@ def main():
             st.session_state.current_account = selected_acc
             st.rerun()
 
-    with st.sidebar.expander("➕ Добавить магазин"):
+    with st.sidebar.expander("➕ Добавить"):
         name = st.text_input("Название:")
         token = st.text_input("Токен:", type="password")
         if st.button("Сохранить"):
@@ -146,7 +172,6 @@ def main():
                 st.session_state.current_page = p
                 st.rerun()
         
-        # Рендеринг страницы
         try: pages[st.session_state.current_page]()
         except Exception as e: st.error(f"Ошибка: {e}")
 
